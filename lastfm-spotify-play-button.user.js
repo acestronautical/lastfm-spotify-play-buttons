@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Last.fm Spotify Play Button
 // @namespace    https://github.com/
-// @version      2.3
-// @description  Replace Last.fm track play buttons with Spotify-style buttons
+// @version      2.4
+// @description  Replace Last.fm track and album play buttons with Spotify-style buttons
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
 // ==/UserScript==
@@ -33,7 +33,6 @@
         }
 
 
-        /* Larger icon for Last.fm home recommendation cards */
         .recs-feed-playlink .spotify-custom-button {
             width:44px !important;
             height:44px !important;
@@ -45,9 +44,10 @@
         }
 
 
-        /* Remove Last.fm play overlay styling */
         a[data-spotify-replaced]::before,
-        a[data-spotify-replaced]::after {
+        a[data-spotify-replaced]::after,
+        button[data-spotify-replaced]::before,
+        button[data-spotify-replaced]::after {
             display:none !important;
         }
 
@@ -71,14 +71,12 @@
                     r="16"
                     fill="#1DB954"/>
 
-
                 <path
                     d="M8 12.5 C14 10.5 21 11 25 13"
                     fill="none"
                     stroke="#000"
                     stroke-width="2"
                     stroke-linecap="round"/>
-
 
                 <path
                     d="M9 16 C14 14.5 20 15 23.5 17"
@@ -87,14 +85,12 @@
                     stroke-width="2"
                     stroke-linecap="round"/>
 
-
                 <path
                     d="M10.5 19.5 C14 18.5 18 19 21 20.5"
                     fill="none"
                     stroke="#000"
                     stroke-width="2"
                     stroke-linecap="round"/>
-
 
                 <path
                     d="M13 9 L13 23 L23 16 Z"
@@ -107,15 +103,48 @@
 
 
 
-    function replaceButtons() {
+    function openSpotify(url) {
+
+        GM_openInTab(
+            url,
+            {
+                active:false,
+                insert:true,
+                setParent:true
+            }
+        );
+
+    }
 
 
-        const buttons = document.querySelectorAll(
-            'a.js-playlink[data-track-name][data-artist-name]'
+
+    function styleButton(button) {
+
+        button.addEventListener(
+            "mouseenter",
+            () => {
+                button.style.transform = "scale(1.12)";
+            }
         );
 
 
-        buttons.forEach(button => {
+        button.addEventListener(
+            "mouseleave",
+            () => {
+                button.style.transform = "scale(1)";
+            }
+        );
+
+    }
+
+
+
+    function replaceTrackButtons() {
+
+
+        document.querySelectorAll(
+            'a.js-playlink[data-track-name][data-artist-name]'
+        ).forEach(button => {
 
 
             if (button.dataset.spotifyReplaced) {
@@ -132,7 +161,6 @@
             }
 
 
-
             const spotifyUrl =
                 "https://open.spotify.com/search/" +
                 encodeURIComponent(
@@ -143,39 +171,17 @@
 
             button.dataset.spotifyReplaced = "true";
 
-
-
-            // Remove YouTube behavior
             button.removeAttribute("href");
             button.removeAttribute("target");
             button.removeAttribute("data-youtube-id");
             button.removeAttribute("data-youtube-url");
 
 
-
             button.innerHTML = spotifyIcon();
-
 
 
             button.title =
                 `Play on Spotify: ${artist} - ${track}`;
-
-
-
-            button.addEventListener(
-                "mouseenter",
-                () => {
-                    button.style.transform = "scale(1.12)";
-                }
-            );
-
-
-            button.addEventListener(
-                "mouseleave",
-                () => {
-                    button.style.transform = "scale(1)";
-                }
-            );
 
 
 
@@ -188,35 +194,144 @@
 
 
                     console.log(
-                        "Spotify:",
+                        "Spotify track:",
                         artist,
                         "-",
                         track
                     );
 
 
-                    GM_openInTab(
-                        spotifyUrl,
-                        {
-                            active:false,
-                            insert:true,
-                            setParent:true
-                        }
-                    );
+                    openSpotify(spotifyUrl);
 
                 },
                 true
             );
 
 
+            styleButton(button);
+
+
             console.log(
-                "Replaced:",
+                "Track replaced:",
                 artist,
                 "-",
                 track
             );
 
         });
+
+    }
+
+
+
+    function replaceAlbumButtons() {
+
+
+        document.querySelectorAll(
+            'button.js-playlink-station[data-station-url]'
+        ).forEach(button => {
+
+
+            if (button.dataset.spotifyReplaced) {
+                return;
+            }
+
+
+            const stationUrl =
+                button.dataset.stationUrl;
+
+
+
+            const match =
+                stationUrl.match(
+                    /\/player\/station\/music\/([^/]+)\/(.+)/
+                );
+
+
+            if (!match) {
+                return;
+            }
+
+
+
+            const artist =
+                decodeURIComponent(match[1])
+                    .replace(/\+/g, " ");
+
+
+
+            const album =
+                decodeURIComponent(match[2])
+                    .replace(/\+/g, " ");
+
+
+
+            const spotifyUrl =
+                "https://open.spotify.com/search/" +
+                encodeURIComponent(
+                    `${album} ${artist} album`
+                );
+
+
+
+            button.dataset.spotifyReplaced = "true";
+
+
+
+            button.innerHTML =
+                spotifyIcon();
+
+
+
+            button.title =
+                `Play album on Spotify: ${artist} - ${album}`;
+
+
+
+            button.addEventListener(
+                "click",
+                function(e) {
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+
+                    console.log(
+                        "Spotify album:",
+                        artist,
+                        "-",
+                        album
+                    );
+
+
+                    openSpotify(spotifyUrl);
+
+                },
+                true
+            );
+
+
+            styleButton(button);
+
+
+
+            console.log(
+                "Album replaced:",
+                artist,
+                "-",
+                album
+            );
+
+        });
+
+    }
+
+
+
+    function replaceButtons() {
+
+        replaceTrackButtons();
+        replaceAlbumButtons();
 
     }
 
