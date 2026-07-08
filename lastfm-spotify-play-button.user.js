@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Last.fm Spotify Play Button
 // @namespace    https://github.com/
-// @version      2.4
-// @description  Replace Last.fm track and album play buttons with Spotify-style buttons
+// @version      2.9
+// @description  Replace Last.fm track and album play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
 // ==/UserScript==
@@ -17,93 +17,139 @@
 
     style.textContent = `
 
-        .spotify-custom-button {
-            display:flex !important;
-            align-items:center !important;
-            justify-content:center !important;
-            width:32px !important;
-            height:32px !important;
-            pointer-events:none !important;
-        }
+.spotify-custom-button {
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    width:32px !important;
+    height:32px !important;
+}
 
-        .spotify-custom-button svg {
-            display:block !important;
-            width:32px !important;
-            height:32px !important;
-        }
-
-
-        .recs-feed-playlink .spotify-custom-button {
-            width:44px !important;
-            height:44px !important;
-        }
-
-        .recs-feed-playlink .spotify-custom-button svg {
-            width:44px !important;
-            height:44px !important;
-        }
+.spotify-custom-button svg {
+    display:block !important;
+    width:32px !important;
+    height:32px !important;
+}
 
 
-        a[data-spotify-replaced]::before,
-        a[data-spotify-replaced]::after,
-        button[data-spotify-replaced]::before,
-        button[data-spotify-replaced]::after {
-            display:none !important;
-        }
+.recs-feed-playlink .spotify-custom-button {
+    width:44px !important;
+    height:44px !important;
+}
 
-    `;
+.recs-feed-playlink .spotify-custom-button svg {
+    width:44px !important;
+    height:44px !important;
+}
+
+
+.spotify-menu-anchor {
+    position:absolute !important;
+    z-index:2147483647 !important;
+}
+
+
+.spotify-menu {
+    display:none;
+    position:absolute;
+
+    left:0;
+    top:100%;
+
+    width:88px;
+
+    background:rgba(25,25,25,.72);
+    backdrop-filter:blur(8px);
+
+    border-radius:5px;
+    padding:4px 0;
+
+    z-index:2147483647 !important;
+
+    box-shadow:
+        0 4px 16px rgba(0,0,0,.55);
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Arial,
+        sans-serif;
+
+    font-size:12px;
+}
+
+
+.spotify-menu-item {
+    padding:6px 10px;
+    color:#ddd;
+    cursor:pointer;
+    white-space:nowrap;
+}
+
+
+.spotify-menu-item:hover {
+    background:#1DB954;
+    color:#000;
+}
+
+
+a[data-spotify-replaced]::before,
+a[data-spotify-replaced]::after,
+button[data-spotify-replaced]::before,
+button[data-spotify-replaced]::after {
+    display:none !important;
+}
+
+`;
 
     document.head.appendChild(style);
 
 
 
-    function spotifyIcon() {
+    function spotifyIcon(){
 
         return `
-        <span class="spotify-custom-button">
+<svg viewBox="0 0 32 32"
+     xmlns="http://www.w3.org/2000/svg">
 
-            <svg viewBox="0 0 32 32"
-                 xmlns="http://www.w3.org/2000/svg">
+<circle
+    cx="16"
+    cy="16"
+    r="16"
+    fill="#1DB954"/>
 
-                <circle
-                    cx="16"
-                    cy="16"
-                    r="16"
-                    fill="#1DB954"/>
+<path
+    d="M8 12.5C14 10.5 21 11 25 13"
+    fill="none"
+    stroke="#000"
+    stroke-width="2"
+    stroke-linecap="round"/>
 
-                <path
-                    d="M8 12.5 C14 10.5 21 11 25 13"
-                    fill="none"
-                    stroke="#000"
-                    stroke-width="2"
-                    stroke-linecap="round"/>
+<path
+    d="M9 16C14 14.5 20 15 23.5 17"
+    fill="none"
+    stroke="#000"
+    stroke-width="2"
+    stroke-linecap="round"/>
 
-                <path
-                    d="M9 16 C14 14.5 20 15 23.5 17"
-                    fill="none"
-                    stroke="#000"
-                    stroke-width="2"
-                    stroke-linecap="round"/>
+<path
+    d="M10.5 19.5C14 18.5 18 19 21 20.5"
+    fill="none"
+    stroke="#000"
+    stroke-width="2"
+    stroke-linecap="round"/>
 
-                <path
-                    d="M10.5 19.5 C14 18.5 18 19 21 20.5"
-                    fill="none"
-                    stroke="#000"
-                    stroke-width="2"
-                    stroke-linecap="round"/>
+<path
+    d="M13 9L13 23L23 16Z"
+    fill="#fff"/>
 
-                <path
-                    d="M13 9 L13 23 L23 16 Z"
-                    fill="#fff"/>
-
-            </svg>
-
-        </span>`;
+</svg>`;
     }
 
 
 
-    function openSpotify(url) {
+    function openSpotify(url){
 
         GM_openInTab(
             url,
@@ -118,20 +164,148 @@
 
 
 
-    function styleButton(button) {
+    function makeSpotifyUrl(type,artist,name,action){
+
+        return (
+            "https://open.spotify.com/search/" +
+            encodeURIComponent(
+                `${artist} ${name} ${type}`
+            ) +
+            "?lastfm=true&action=" +
+            action
+        );
+
+    }
+
+
+
+    function addMenu(button,artist,name,type){
+
+        const anchor =
+            document.createElement("span");
+
+        anchor.className =
+            "spotify-menu-anchor";
+
+
+        const menu =
+            document.createElement("div");
+
+        menu.className =
+            "spotify-menu";
+
+
+        [
+            ["Play","play"],
+            ["Queue","queue"],
+            ["Like","like"]
+
+        ].forEach(action=>{
+
+
+            const item =
+                document.createElement("div");
+
+            item.className =
+                "spotify-menu-item";
+
+            item.textContent =
+                action[0];
+
+
+            item.onclick=e=>{
+
+                e.preventDefault();
+                e.stopPropagation();
+
+
+                openSpotify(
+                    makeSpotifyUrl(
+                        type,
+                        artist,
+                        name,
+                        action[1]
+                    )
+                );
+
+            };
+
+
+            menu.appendChild(item);
+
+        });
+
+
+        anchor.appendChild(menu);
+
+
+        const parent =
+            button.parentElement;
+
+
+        parent.style.position =
+            "relative";
+
+
+        parent.appendChild(anchor);
+
+
+
+        const updatePosition = ()=>{
+
+            const r =
+                button.getBoundingClientRect();
+
+            const pr =
+                parent.getBoundingClientRect();
+
+
+            anchor.style.left =
+                (r.left - pr.left) + "px";
+
+
+            anchor.style.top =
+                (r.top - pr.top + r.height) + "px";
+
+        };
+
+
+        updatePosition();
+
 
         button.addEventListener(
             "mouseenter",
-            () => {
-                button.style.transform = "scale(1.12)";
+            ()=>{
+
+                updatePosition();
+
+                menu.style.display="block";
+
             }
         );
 
 
         button.addEventListener(
             "mouseleave",
-            () => {
-                button.style.transform = "scale(1)";
+            ()=>{
+
+                setTimeout(()=>{
+
+                    if(!menu.matches(":hover"))
+                        menu.style.display="none";
+
+                },150);
+
+            }
+        );
+
+
+        menu.addEventListener(
+            "mouseleave",
+            ()=>{
+
+                menu.style.display="none";
+
             }
         );
 
@@ -139,84 +313,92 @@
 
 
 
-    function replaceTrackButtons() {
+    function styleButton(button){
 
+        button.addEventListener(
+            "mouseenter",
+            ()=>{
+                button.style.transform="scale(1.12)";
+            }
+        );
+
+
+        button.addEventListener(
+            "mouseleave",
+            ()=>{
+                button.style.transform="scale(1)";
+            }
+        );
+
+    }
+
+
+
+    function replaceTrackButtons(){
 
         document.querySelectorAll(
             'a.js-playlink[data-track-name][data-artist-name]'
-        ).forEach(button => {
+        ).forEach(button=>{
 
 
-            if (button.dataset.spotifyReplaced) {
+            if(button.dataset.spotifyReplaced)
                 return;
-            }
 
 
-            const track = button.dataset.trackName;
-            const artist = button.dataset.artistName;
+            const track =
+                button.dataset.trackName;
 
 
-            if (!track || !artist) {
+            const artist =
+                button.dataset.artistName;
+
+
+            if(!track || !artist)
                 return;
-            }
 
 
-            const spotifyUrl =
-                  "https://open.spotify.com/search/" +
-                  encodeURIComponent(
-                      `${artist} ${track}`
-                  ) +
-                  "?lastfm=true";
+            button.dataset.spotifyReplaced =
+                "true";
 
-
-            button.dataset.spotifyReplaced = "true";
 
             button.removeAttribute("href");
             button.removeAttribute("target");
-            button.removeAttribute("data-youtube-id");
-            button.removeAttribute("data-youtube-url");
 
 
-            button.innerHTML = spotifyIcon();
+            button.innerHTML =
+                `
+<span class="spotify-custom-button">
+${spotifyIcon()}
+</span>`;
 
 
-            button.title =
-                `Play on Spotify: ${artist} - ${track}`;
+            button.onclick=e=>{
+
+                e.preventDefault();
+                e.stopPropagation();
 
 
-
-            button.addEventListener(
-                "click",
-                function(e) {
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-
-                    console.log(
-                        "Spotify track:",
+                openSpotify(
+                    makeSpotifyUrl(
+                        "track",
                         artist,
-                        "-",
-                        track
-                    );
+                        track,
+                        "play"
+                    )
+                );
+
+            };
 
 
-                    openSpotify(spotifyUrl);
-
-                },
-                true
+            addMenu(
+                button,
+                artist,
+                track,
+                "track"
             );
 
 
             styleButton(button);
-
-
-            console.log(
-                "Track replaced:",
-                artist,
-                "-",
-                track
-            );
 
         });
 
@@ -224,103 +406,76 @@
 
 
 
-    function replaceAlbumButtons() {
-
+    function replaceAlbumButtons(){
 
         document.querySelectorAll(
             'button.js-playlink-station[data-station-url]'
-        ).forEach(button => {
+        ).forEach(button=>{
 
 
-            if (button.dataset.spotifyReplaced) {
+            if(button.dataset.spotifyReplaced)
                 return;
-            }
-
-
-            const stationUrl =
-                button.dataset.stationUrl;
-
 
 
             const match =
-                stationUrl.match(
+                button.dataset.stationUrl.match(
                     /\/player\/station\/music\/([^/]+)\/(.+)/
                 );
 
 
-            if (!match) {
+            if(!match)
                 return;
-            }
-
 
 
             const artist =
                 decodeURIComponent(match[1])
-                    .replace(/\+/g, " ");
-
+                .replace(/\+/g," ");
 
 
             const album =
                 decodeURIComponent(match[2])
-                    .replace(/\+/g, " ");
+                .replace(/\+/g," ");
 
 
 
-            const spotifyUrl =
-                "https://open.spotify.com/search/" +
-                encodeURIComponent(
-                    `${album} ${artist} album`
-                );
-
-
-
-            button.dataset.spotifyReplaced = "true";
-
+            button.dataset.spotifyReplaced =
+                "true";
 
 
             button.innerHTML =
-                spotifyIcon();
+                `
+<span class="spotify-custom-button">
+${spotifyIcon()}
+</span>`;
 
 
+            button.onclick=e=>{
 
-            button.title =
-                `Play album on Spotify: ${artist} - ${album}`;
-
-
-
-            button.addEventListener(
-                "click",
-                function(e) {
-
-                    e.preventDefault();
-                    e.stopPropagation();
+                e.preventDefault();
+                e.stopPropagation();
 
 
-                    console.log(
-                        "Spotify album:",
+                openSpotify(
+                    makeSpotifyUrl(
+                        "album",
                         artist,
-                        "-",
-                        album
-                    );
+                        album,
+                        "play"
+                    )
+                );
+
+            };
 
 
-                    openSpotify(spotifyUrl);
-
-                },
-                true
+            addMenu(
+                button,
+                artist,
+                album,
+                "album"
             );
 
 
             styleButton(button);
-
-
-
-            console.log(
-                "Album replaced:",
-                artist,
-                "-",
-                album
-            );
 
         });
 
@@ -328,7 +483,7 @@
 
 
 
-    function replaceButtons() {
+    function replaceButtons(){
 
         replaceTrackButtons();
         replaceAlbumButtons();
@@ -338,7 +493,6 @@
 
 
     replaceButtons();
-
 
 
     new MutationObserver(replaceButtons)
