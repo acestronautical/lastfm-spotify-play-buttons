@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spotify Search Auto Play First Track
 // @namespace    https://github.com/
-// @version      0.4
-// @description  Clicks the first Spotify search result play button automatically and closes helper tab
+// @version      0.3
+// @description  Auto play Spotify searches launched from Last.fm only
 // @match        https://open.spotify.com/search/*
 // @grant        none
 // ==/UserScript==
@@ -10,23 +10,27 @@
 (function () {
     'use strict';
 
-    console.log("Spotify auto-play active");
+
+    const params = new URLSearchParams(
+        window.location.search
+    );
+
+
+    if (!params.has("lastfm")) {
+        console.log(
+            "Normal Spotify search - ignoring"
+        );
+        return;
+    }
+
+
+    console.log(
+        "Last.fm Spotify handoff detected"
+    );
 
 
     let tries = 0;
-    const maxTries = 40;
-
-
-    function closeHelperTab() {
-
-        console.log("Closing Spotify helper tab");
-
-        setTimeout(() => {
-            window.close();
-        }, 3000);
-
-    }
-
+    const maxTries = 30;
 
 
     function tryPlay() {
@@ -35,14 +39,18 @@
 
 
         const rows =
-            document.querySelectorAll('[role="row"]');
+            document.querySelectorAll(
+                '[role="row"]'
+            );
 
 
         for (const row of rows) {
 
 
             const title =
-                row.querySelector('[data-testid="title"]');
+                row.querySelector(
+                    '[data-testid="title"]'
+                );
 
 
             const play =
@@ -55,37 +63,28 @@
 
 
                 console.log(
-                    "Found track:",
+                    "Playing:",
                     title.innerText
                 );
 
 
-                const event =
-                    new MouseEvent(
-                        "click",
-                        {
-                            bubbles:true,
-                            cancelable:true,
-                            view:window
-                        }
-                    );
-
-
-                play.dispatchEvent(event);
+                play.click();
 
 
                 console.log(
-                    "Clicked play"
+                    "Playback started"
                 );
 
 
-                closeHelperTab();
+                setTimeout(() => {
+
+                    window.close();
+
+                }, 1500);
 
 
                 return;
-
             }
-
         }
 
 
@@ -105,7 +104,6 @@
         }
 
     }
-
 
 
     setTimeout(

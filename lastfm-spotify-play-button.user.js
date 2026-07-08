@@ -162,11 +162,11 @@
 
 
             const spotifyUrl =
-                "https://open.spotify.com/search/" +
-                encodeURIComponent(
-                    `${artist} ${track}`
-                );
-
+                  "https://open.spotify.com/search/" +
+                  encodeURIComponent(
+                      `${artist} ${track}`
+                  ) +
+                  "?lastfm=true";
 
 
             button.dataset.spotifyReplaced = "true";

@@ -49,7 +49,7 @@ Make sure you give permission to run user scripts
 #### Add BOTH scripts:
 
 1. `lastfm-spotify-play-button.user.js`
-2. `spotify-search-autoplay.user.js`
+2. `spotify-lastfm-search-autoplay.user.js`
 
 After installation, refresh Last.fm.
 
