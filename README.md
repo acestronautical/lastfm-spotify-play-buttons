@@ -2,7 +2,7 @@
 
 Tampermonkey userscripts that connect Last.fm music discovery with Spotify playback.
 
-Browse Last.fm charts, libraries, neighbors, recommendations, and artist pages, then launch tracks in Spotify with a single click — without manually copying song names into Spotify.
+Browse Last.fm charts, libraries, neighbors, recommendations, and artist pages, then launch tracks, albums or artists in Spotify with a single click — without manually copying names into Spotify.
 
 ![Example screenshot](example-screenshot.png)
 
@@ -10,33 +10,37 @@ Browse Last.fm charts, libraries, neighbors, recommendations, and artist pages, 
 
 Uses two Tampermonkey scripts:
 
-### 1. Last.fm Spotify Play Button
+### 1. Last.fm Inject Spotify Buttons
 
-Adds Spotify buttons to Last.fm pages.
+Adds Spotify buttons to Last.fm track, album and artist play controls.
 
-When clicked:
+Click = Play. Hover for a Play / Queue / Like menu.
 
 ```
-Last.fm track
-      ↓
-Spotify search
+Last.fm track / album / artist
+              ↓
+      Spotify search page
+              ↓
+     (auto-play on the other side)
 ```
 
-### 2. Spotify Search Auto Play First Track
+### 2. Spotify Last.fm Puppeteer
 
-Runs on Spotify search pages.
+Runs on Spotify search pages opened by the first script.
 
 It:
 
 ```
 Spotify search page
       ↓
-Find first track result
+Wait for first matching result (track / album / artist)
       ↓
-Click Play
+Perform requested action (play, queue, like)
       ↓
-Close helper tab
+Close the helper tab
 ```
+
+The scripts communicate through URL params (`?lastfm=true&entity=…&action=…`) so the Spotify side only reacts to tabs launched by the Last.fm side.
 
 ## Installation
 
@@ -48,28 +52,29 @@ Make sure you give permission to run user scripts
 
 #### Add BOTH scripts:
 
-1. `lastfm-spotify-play-button.user.js`
-2. `spotify-lastfm-search-autoplay.user.js`
+1. `lastfm-inject-spotify-buttons.user.js`
+2. `spotify-lastfm-puppeteer.user.js`
 
 After installation, refresh Last.fm.
 
 ## Usage
 
-1. Open any Last.fm track list:
+1. Open any Last.fm page with play buttons:
 
    * charts
    * user libraries
    * recommendations
    * neighbors
-   * artist pages
+   * artist pages (tracks + album covers)
+   * album pages
 
-2. Click the green Spotify button.
+2. Click the green Spotify button (or hover for **Play / Queue / Like**).
 
 3. Spotify will:
 
    * open a background search tab
-   * select the first result
-   * start playback
+   * pick the first result matching the requested entity type
+   * perform the requested action
    * close the helper tab
 
 ## Disclaimer
