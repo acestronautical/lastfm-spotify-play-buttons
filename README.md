@@ -44,18 +44,27 @@ The scripts communicate through URL params (`?lastfm=true&entity=…&action=…`
 
 ## Installation
 
-#### Get Tampermonkey:
+Two install paths — pick one.
 
-https://www.tampermonkey.net/
+### Option A: Tampermonkey (userscripts)
 
-Make sure you give permission to run user scripts
+1. Install Tampermonkey: https://www.tampermonkey.net/ (make sure you enable "allow user scripts").
+2. Add both scripts:
+   * `lastfm-inject-spotify-buttons.user.js`
+   * `spotify-lastfm-puppeteer.user.js`
+3. Refresh Last.fm.
 
-#### Add BOTH scripts:
+### Option B: Chrome extension (sideload)
 
-1. `lastfm-inject-spotify-buttons.user.js`
-2. `spotify-lastfm-puppeteer.user.js`
+Works in Chrome, Edge, Brave, and other Chromium browsers.
 
-After installation, refresh Last.fm.
+1. Clone or download this repo.
+2. Open `chrome://extensions`.
+3. Toggle **Developer mode** on (top right).
+4. Click **Load unpacked** and select the `extension/` folder from this repo.
+5. Refresh Last.fm.
+
+The `extension/content/*.js` files are copies of the userscripts at the repo root — both install paths run the same code. If you edit either userscript, run `scripts/sync-extension.sh` to update the extension copies and hit the reload button on the extension card.
 
 ## Usage
 
