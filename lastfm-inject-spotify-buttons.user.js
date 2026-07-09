@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.3
+// @version      3.4
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
