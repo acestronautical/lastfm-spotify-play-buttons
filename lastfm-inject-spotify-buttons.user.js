@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.4
+// @version      3.5
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -108,14 +108,17 @@ button[data-spotify-replaced] {
 
 
 /* Artist-page header "Play artist" button — keep native pill layout
-   and text, just swap the inline play triangle for the smaller
-   Spotify disc. */
+   and text, just swap the inline play triangle for a small Spotify
+   disc. Last.fm reserves left padding on the pill for its own inline
+   triangle background; we override it so our icon isn't pushed to
+   the right of the pill's left edge. */
 .header-new-playlink[data-spotify-replaced] {
     display:inline-flex !important;
     align-items:center !important;
-    --lfs-size:20px;
+    padding-left:14px !important;
+    --lfs-size:22px;
 }
-.header-new-playlink .spotify-custom-button { margin-right:6px; }
+.header-new-playlink .spotify-custom-button { margin-right:8px; }
 
 
 /* Shared style for buttons we inject from scratch (artist-avatar
