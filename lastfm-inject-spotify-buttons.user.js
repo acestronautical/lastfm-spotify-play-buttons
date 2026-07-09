@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.5
+// @version      3.6
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -93,8 +93,12 @@ button[data-spotify-replaced] {
    centered 60x60 overlay on the cover cell and grow the inner icon
    to fill it. Excludes:
      - .recs-feed-playlink       (home recs feed — smaller 44px)
-     - .image-overlay-playlink-link (chart thumbnails — native 32px fits) */
-.desktop-playlink[data-spotify-replaced]:not(.recs-feed-playlink):not(.image-overlay-playlink-link) {
+     - .image-overlay-playlink-link (chart thumbnails — native 32px fits)
+     - .header-new-playlink      (album header pill — album pages
+                                  carry BOTH classes, so exclude it
+                                  here or the pill gets flipped into a
+                                  60x60 absolute-positioned overlay) */
+.desktop-playlink[data-spotify-replaced]:not(.recs-feed-playlink):not(.image-overlay-playlink-link):not(.header-new-playlink) {
     position:absolute !important;
     top:50% !important;
     left:50% !important;
@@ -116,6 +120,7 @@ button[data-spotify-replaced] {
     display:inline-flex !important;
     align-items:center !important;
     padding-left:14px !important;
+    white-space:nowrap !important;
     --lfs-size:22px;
 }
 .header-new-playlink .spotify-custom-button { margin-right:8px; }
@@ -214,6 +219,35 @@ button[data-spotify-replaced] {
     top:14px !important;
     right:14px !important;
     filter:drop-shadow(0 2px 8px rgba(0,0,0,.6));
+}
+
+
+/* Album-page tracklist — the empty .chartlist-play cells get a
+   compact inline Spotify button. Not position:absolute; it flows
+   inside the td naturally. */
+.spotify-chartlist-play-button {
+    display:inline-flex !important;
+    align-items:center !important;
+    background:transparent !important;
+    border:0 !important;
+    padding:0 !important;
+    cursor:pointer !important;
+    --lfs-size:22px;
+}
+
+
+/* Album-page header — injected alongside Bookmark/More in the pill
+   action row. Sized to sit comfortably next to the native pills. */
+.spotify-album-header-button {
+    display:inline-flex !important;
+    align-items:center !important;
+    background:transparent !important;
+    border:0 !important;
+    padding:0 !important;
+    margin-right:8px !important;
+    cursor:pointer !important;
+    --lfs-size:40px;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.4));
 }
 
 
@@ -1110,8 +1144,11 @@ ${spotifyIcon(currentAction)}
         }
 
 
-        // Track radio: /_/{track}
-        if(parts.second === "_" && parts.third){
+        // Track — two URL shapes both use a third segment:
+        //   /music/{artist}/_/{track}       Last.fm's canonical form
+        //   /music/{artist}/{album}/{track} album-context (used by
+        //                                   chartlist track links)
+        if(parts.third){
 
             return {
                 entity: "track",
@@ -1122,7 +1159,7 @@ ${spotifyIcon(currentAction)}
         }
 
 
-        // Album radio: /{album}
+        // Album (two segments).
         return {
             entity: "album",
             artist: parts.artist,
@@ -1219,6 +1256,19 @@ ${spotifyIcon(currentAction)}
         // Big featured-artist cards on /music. Button lives on the card
         // itself (top-right corner), not on any inner avatar.
         { card: ".music-featured-item.music-featured-artist",     nameSel: ".music-featured-item-heading-link",   hostSel: null,                                             btnCls: "spotify-featured-artist-button" },
+
+        // Album-page tracklist rows. Last.fm leaves the .chartlist-play
+        // cell empty on album pages; fill each empty cell with a compact
+        // per-track Spotify button. requireEmptyHost skips rows that
+        // already have a native play button (top-tracks lists elsewhere).
+        { card: "tr.chartlist-row",                               nameSel: ".chartlist-name > a",                 hostSel: ".chartlist-play",                                btnCls: "spotify-chartlist-play-button", requireEmptyHost: true },
+
+        // Album-page header pill area. Only inject when Last.fm didn't
+        // render its own .header-new-playlink (which we would have
+        // already swapped via replaceStationButtons above). On albums
+        // that DO have a native play button, our swap already covers it
+        // and this rule doesn't match.
+        { card: "header.header-new--album:not(:has(.header-new-playlink))", nameSel: "link[itemprop='url']", hostSel: ".header-new-info-desktop .header-new-actions", btnCls: "spotify-album-header-button" },
     ];
 
 
@@ -1260,6 +1310,11 @@ ${spotifyIcon(currentAction)}
 
         const host = cfg.hostSel ? card.querySelector(cfg.hostSel) : card;
         if(!host) return;
+
+        // Skip if the host already has child elements (used to avoid
+        // double-injecting into chartlist play cells that already have
+        // a native Last.fm play button).
+        if(cfg.requireEmptyHost && host.querySelector("*")) return;
 
         const label = info.name
             ? `Play ${info.name} by ${info.artist} on Spotify`
