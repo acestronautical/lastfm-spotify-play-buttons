@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.7
+// @version      3.8
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -1261,8 +1261,14 @@ ${spotifyIcon(currentAction)}
         // host, no native playlink.
         { card: ".artist-featured-items-item-wrap",               nameSel: ".link-block-target",                  hostSel: ".artist-featured-items-item-image",              btnCls: "spotify-similar-artist-button" },
 
-        // /home/artists + /music/+recommended/artists recs-feed cards.
-        { card: ".recs-feed-item--artist",                        nameSel: ".link-block-target",                  hostSel: ".recs-feed-cover-image-wrap",                    btnCls: "spotify-similar-artist-button" },
+        // /home/{artists|albums|...} + /music/+recommended/{...} recs-feed
+        // cards. Artist / album / track variants share the same card
+        // shape and injection host; entity is derived from the URL by
+        // musicPartsToInfo so this one config covers them all. Skip
+        // cards that already have a native .recs-feed-playlink (which
+        // replaceTrackButtons or replaceStationButtons already swapped)
+        // so we don't double-inject.
+        { card: ".recs-feed-item:not(:has(.recs-feed-playlink))",  nameSel: ".link-block-target",                hostSel: ".recs-feed-cover-image-wrap",                    btnCls: "spotify-similar-artist-button" },
 
         // Chart artist rows. The .js-link-block class lives on the tr
         // only for artist rows, so it disambiguates from track/album.
