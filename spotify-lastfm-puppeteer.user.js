@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotify Last.fm Puppeteer
 // @namespace    https://github.com/
-// @version      1.1
+// @version      1.3
 // @description  Puppeteer Spotify's search UI to perform actions launched from Last.fm
 // @match        https://open.spotify.com/search/*
 // @grant        none
@@ -119,19 +119,20 @@
 
 
 
-    // Try each strategy in order until one returns a truthy value. Logs
-    // the strategy name that matched so we can spot when we're relying on
-    // a fallback (which usually means Spotify has changed something and
-    // the primary strategy needs updating).
+    // Try each strategy in order until one returns a truthy value.
+    // Only logs when we fall past the primary strategy — that's the
+    // signal that Spotify has changed something and the top selector
+    // may need updating.
 
     function resolveWith(label, strategies, ...args){
 
 
-        for(const { name, run } of strategies){
+        for(let i = 0; i < strategies.length; i++){
+
+            const { name, run } = strategies[i];
 
 
             let result;
-
 
             try {
                 result = run(...args);
@@ -143,7 +144,8 @@
 
             if(result){
 
-                log(`${label} matched via "${name}"`);
+                if(i > 0)
+                    log(`${label} matched via fallback "${name}"`);
 
                 return result;
 
@@ -385,9 +387,34 @@
             run: row => row.querySelector(
                 'button[aria-checked][data-encore-id="buttonTertiary"]:not([aria-haspopup])'
             )
+        },
+
+        // Artist rows expose Follow as a plain buttonSecondary with
+        // "Follow" / "Following" text content and no aria attributes.
+        // Only artist rows on the search page carry a buttonSecondary,
+        // so scoping by the encore role is enough.
+        {
+            name: "buttonSecondary (Follow on artist rows)",
+            run: row => row.querySelector(
+                'button[data-encore-id="buttonSecondary"]'
+            )
         }
 
     ];
+
+
+    // Locale-tolerant "already followed" check for artist Follow buttons.
+    // English-only to start; falling through to a click in other locales
+    // just toggles Follow off, which is the same failure mode as the
+    // aria-checked track-like path.
+
+    function isAlreadyFollowing(button){
+
+        return /^following$/i.test(
+            (button.textContent || "").trim()
+        );
+
+    }
 
 
     function doLike(row){
@@ -403,9 +430,10 @@
         if(!like) return false;
 
 
-        if(like.getAttribute("aria-checked") === "true"){
+        if(like.getAttribute("aria-checked") === "true" ||
+           isAlreadyFollowing(like)){
 
-            log("Already liked - skipping");
+            log("Already liked/followed - skipping");
 
             closeHelper();
 
@@ -487,64 +515,36 @@
     }
 
 
-    function menuItemLabel(item){
-
-        return (
-            item.getAttribute("aria-label") ||
-            item.textContent ||
-            ""
-        );
-
-    }
-
-
-    const menuItemStrategies = [
-
-        // Primary: any menuitem inside the visible context menu.
-        {
-            name: 'role="menuitem"',
-            run: () => [
-                ...document.querySelectorAll('[role="menuitem"]')
-            ]
-        },
-
-        // Structural fallback: buttons/links in a container labelled as
-        // a menu (Spotify sometimes portals into #context-menu or a
-        // [role="menu"] wrapper).
-        {
-            name: '[role="menu"] > * button/link',
-            run: () => [
-                ...document.querySelectorAll(
-                    '[role="menu"] button, [role="menu"] a'
-                )
-            ]
-        }
-
-    ];
-
+    // Menu item lookup. One flat query covers both the primary shape
+    // ([role=menuitem]) and the fallback (button/link inside a
+    // [role=menu] wrapper Spotify occasionally uses for portals).
 
     function findQueueMenuItem(){
 
 
-        const list = resolveWith(
-            "menu items",
-            menuItemStrategies
-                .map(s => ({
-                    name: s.name,
-                    run: () => {
-                        const arr = s.run();
-                        return arr.length ? arr : null;
-                    }
-                }))
-        );
+        const items =
+            document.querySelectorAll(
+                '[role="menuitem"], ' +
+                '[role="menu"] button, ' +
+                '[role="menu"] a'
+            );
 
 
-        if(!list) return null;
+        for(const item of items){
+
+            const label =
+                item.getAttribute("aria-label") ||
+                item.textContent ||
+                "";
 
 
-        return list.find(item =>
-            labelMatchesQueue(menuItemLabel(item))
-        );
+            if(labelMatchesQueue(label))
+                return item;
+
+        }
+
+
+        return null;
 
     }
 

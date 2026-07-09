@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.1
-// @description  Replace Last.fm track and album play buttons with Spotify-style buttons and actions
+// @version      3.3
+// @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
 // ==/UserScript==
@@ -134,6 +134,33 @@ a[data-spotify-replaced]::after,
 button[data-spotify-replaced]::before,
 button[data-spotify-replaced]::after {
     display:none !important;
+}
+
+
+/* Center the injected icon inside whatever container Last.fm gave us.
+   Some hosts (e.g. .image-overlay-playlink-link on video previews)
+   are much bigger than our 32px icon and would otherwise pin the
+   icon to the top-left corner. */
+
+a[data-spotify-replaced],
+button[data-spotify-replaced] {
+    display:inline-flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+}
+
+
+/* Artist-page header "Play artist" button. Last.fm styles it as a
+   text button (80px wide, extra left padding for a 16px inline icon).
+   Shrink it to a 40x40 square so it visually matches the neighbouring
+   bookmark / more buttons. */
+
+[data-spotify-replaced].header-new-playlink {
+    min-width:40px !important;
+    width:40px !important;
+    min-height:40px !important;
+    height:40px !important;
+    padding:0 !important;
 }
 
 `;
@@ -309,6 +336,29 @@ button[data-spotify-replaced]::after {
     }
 
 
+    // Per-entity menu definition. Each item is [label, iconKey, action].
+    // Labels match Spotify's own vocabulary for each entity type so
+    // users know exactly what the action will do on the other side.
+
+    const MENU_ITEMS = {
+        track: [
+            ["Play Song",     "play",  "play"],
+            ["Queue Song",    "queue", "queue"],
+            ["Like Song",     "like",  "like"]
+        ],
+        album: [
+            ["Play Album",    "play",  "play"],
+            ["Queue Album",   "queue", "queue"],
+            ["Add Album",     "like",  "like"]
+        ],
+        artist: [
+            ["Play Artist",   "play",  "play"],
+            ["Queue Artist",  "queue", "queue"],
+            ["Follow Artist", "like",  "like"]
+        ]
+    };
+
+
     function showMenu(button){
 
         if(hideTimer){
@@ -324,32 +374,10 @@ button[data-spotify-replaced]::after {
         menu.innerHTML = "";
 
 
-        // Spotify performs each action on a different unit per entity;
-        // match its own vocabulary so users know exactly what they're
-        // triggering.
-
-        const LABELS = {
-            track: {
-                play:  "Play Song",
-                queue: "Queue Song",
-                like:  "Like Song"
-            },
-            album: {
-                play:  "Play Album",
-                queue: "Queue Album",
-                like:  "Add Album"
-            }
-        };
-
-        const labels = LABELS[entity] || LABELS.track;
+        const items = MENU_ITEMS[entity] || MENU_ITEMS.track;
 
 
-        [
-            [labels.play,  "play"],
-            [labels.queue, "queue"],
-            [labels.like,  "like"]
-
-        ].forEach(([label, action])=>{
+        items.forEach(([label, iconKey, action])=>{
 
 
             const item =
@@ -359,7 +387,7 @@ button[data-spotify-replaced]::after {
                 "spotify-menu-item";
 
             item.innerHTML =
-                MENU_ICONS[action] +
+                MENU_ICONS[iconKey] +
                 `<span>${label}</span>`;
 
 
@@ -539,28 +567,87 @@ button[data-spotify-replaced]::after {
         };
 
 
+        // Strip Last.fm's own hook classes so their delegated click
+        // listeners (which fire on document.body in the capture phase
+        // and would launch Last.fm's own player) no longer match this
+        // element. We've already extracted everything we need from the
+        // data-* attributes.
+
+        button.classList.remove(
+            "js-playlink",
+            "js-playlink-station"
+        );
+
+        delete button.dataset.stationUrl;
+        delete button.dataset.trackName;
+        delete button.dataset.trackUrl;
+        delete button.dataset.artistName;
+        delete button.dataset.artistUrl;
+        delete button.dataset.youtubeId;
+        delete button.dataset.youtubeUrl;
+        delete button.dataset.playlinkAffiliate;
+        delete button.dataset.analyticsAction;
+        delete button.dataset.analyticsLabel;
+
+
+        // Last.fm's `components/link-block` module attaches a click
+        // listener on every `.js-link-block` container that navigates
+        // to the enclosed `link-block-target` href whenever any child
+        // is clicked. That hijacks our button click (bubbles up to the
+        // container, container routes to the album page).
+        //
+        // Neuter it on just this card: unhook the container's class
+        // and disable pointer events on the invisible cover-link
+        // overlay. Other links in the card (title, artist name) still
+        // work as normal <a href>'s.
+
+        const linkBlock = button.closest(".js-link-block, .link-block");
+
+        if(linkBlock){
+
+            linkBlock.classList.remove("js-link-block");
+
+
+            const cover =
+                linkBlock.querySelector(
+                    ".js-link-block-cover-link, .link-block-cover-link"
+                );
+
+            if(cover){
+                cover.style.pointerEvents = "none";
+            }
+
+        }
+
+
         button.innerHTML = `
 <span class="spotify-custom-button" title="Play on Spotify">
 ${SPOTIFY_ICON}
 </span>`;
 
 
-        button.onclick=e=>{
+        // Register the click in the capture phase so we beat any
+        // still-attached document-level delegated handlers.
 
-            e.preventDefault();
-            e.stopPropagation();
+        button.addEventListener(
+            "click",
+            e => {
 
+                e.preventDefault();
+                e.stopImmediatePropagation();
 
-            openSpotify(
-                makeSpotifyUrl(
-                    entity,
-                    artist,
-                    name,
-                    defaultAction
-                )
-            );
+                openSpotify(
+                    makeSpotifyUrl(
+                        entity,
+                        artist,
+                        name,
+                        defaultAction
+                    )
+                );
 
-        };
+            },
+            true
+        );
 
 
         button.addEventListener(
@@ -640,6 +727,12 @@ ${SPOTIFY_ICON}
     // Parse the /music/{artist}[/{album|_}/{track}] path segments used
     // throughout Last.fm's URL scheme (both /music/... links and
     // /player/station/music/... station URLs).
+    //
+    // Last.fm reserves "+"-prefixed segments (+similar, +bookmarks,
+    // +tags, +wiki, +events, +listeners, +albums, +tracks, …) for
+    // meta sub-pages. They look like real path segments but have no
+    // coherent Spotify equivalent, so we reject them at the parser.
+
     function parseMusicPath(pathish){
 
 
@@ -650,6 +743,14 @@ ${SPOTIFY_ICON}
 
 
         if(!m) return null;
+
+
+        // Reject on raw (still-encoded) segments — Last.fm encodes
+        // real spaces as "+", so we must check for the literal "+"
+        // prefix before decodeSeg would turn it into " ".
+
+        if(m[2] && m[2].startsWith("+")) return null;
+        if(m[3] && m[3].startsWith("+")) return null;
 
 
         return {
