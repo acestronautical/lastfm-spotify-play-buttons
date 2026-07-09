@@ -58,11 +58,12 @@ Two install paths — pick one.
 
 Works in Chrome, Edge, Brave, and other Chromium browsers.
 
-1. Clone or download this repo.
-2. Open `chrome://extensions`.
-3. Toggle **Developer mode** on (top right).
-4. Click **Load unpacked** and select the `extension/` folder from this repo.
-5. Refresh Last.fm.
+1. Grab the extension zip from the [latest release](https://github.com/acestronautical/lastfm-spotify-play-buttons/releases/latest) (or clone this repo and use the `extension/` folder directly).
+2. Unzip it somewhere permanent — Chrome loads the folder in place and will break the extension if you move or delete it later.
+3. Open `chrome://extensions`.
+4. Toggle **Developer mode** on (top right).
+5. Click **Load unpacked** and select the unzipped `extension/` folder.
+6. Refresh Last.fm.
 
 The `extension/content/*.js` files are copies of the userscripts at the repo root — both install paths run the same code. If you edit either userscript, run `scripts/sync-extension.sh` to update the extension copies and hit the reload button on the extension card.
 
