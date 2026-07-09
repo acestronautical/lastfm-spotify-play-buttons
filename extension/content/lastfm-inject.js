@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.6
+// @version      3.7
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -223,16 +223,32 @@ button[data-spotify-replaced] {
 
 
 /* Album-page tracklist — the empty .chartlist-play cells get a
-   compact inline Spotify button. Not position:absolute; it flows
-   inside the td naturally. */
+   compact inline Spotify button. Setting --lfs-size on the cell
+   applies to both our injected button and native
+   .chartlist-play-button playlinks that replaceTrackButtons swapped.
+   The second rule strips Last.fm's per-element sizing/padding/
+   background-image so both variants render as identical
+   22x22 transparent hosts around our SVG. */
+.chartlist-play {
+    --lfs-size:22px;
+}
+.chartlist-play [data-spotify-replaced] {
+    width:var(--lfs-size, 22px) !important;
+    height:var(--lfs-size, 22px) !important;
+    padding:0 !important;
+    margin:0 !important;
+    min-width:0 !important;
+    line-height:1 !important;
+    background:transparent !important;
+    background-image:none !important;
+    border:0 !important;
+    text-decoration:none !important;
+    color:inherit !important;
+}
 .spotify-chartlist-play-button {
     display:inline-flex !important;
     align-items:center !important;
-    background:transparent !important;
-    border:0 !important;
-    padding:0 !important;
     cursor:pointer !important;
-    --lfs-size:22px;
 }
 
 
