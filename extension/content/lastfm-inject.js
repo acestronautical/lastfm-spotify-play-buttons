@@ -21,6 +21,31 @@
 
 
 
+    // ---------- config bridge ----------
+
+    // When running as the Chrome extension, content/bridge.js populates
+    // window.__LFS_CONFIG from chrome.storage and keeps it in sync. Under
+    // Tampermonkey there is no bridge, so getConfig() falls back to the
+    // defaults below and behaviour matches the stand-alone userscript.
+
+    const CONFIG_DEFAULTS = {
+        defaultAction:    "play",
+        menuDelay:        280,
+        skipArtistPages:  false,
+        skipAlbumPages:   false,
+        skipLibraryPages: false,
+    };
+
+    function getConfig(){
+        const bridged =
+            (typeof window !== "undefined" && window.__LFS_CONFIG) || null;
+        return bridged
+            ? Object.assign({}, CONFIG_DEFAULTS, bridged)
+            : CONFIG_DEFAULTS;
+    }
+
+
+
     // ---------- styles ----------
 
     const style = document.createElement("style");
@@ -150,17 +175,57 @@ button[data-spotify-replaced] {
 }
 
 
-/* Artist-page header "Play artist" button. Last.fm styles it as a
-   text button (80px wide, extra left padding for a 16px inline icon).
-   Shrink it to a 40x40 square so it visually matches the neighbouring
-   bookmark / more buttons. */
+/* Artist-page header "Play artist" button. Keep Last.fm's native
+   pill layout and text, just swap the inline play triangle for the
+   Spotify green circle at a smaller size. */
 
-[data-spotify-replaced].header-new-playlink {
-    min-width:40px !important;
-    width:40px !important;
-    min-height:40px !important;
-    height:40px !important;
+.header-new-playlink .spotify-custom-button,
+.header-new-playlink .spotify-custom-button svg {
+    width:20px !important;
+    height:20px !important;
+}
+
+.header-new-playlink .spotify-custom-button {
+    margin-right:6px;
+}
+
+.header-new-playlink[data-spotify-replaced] {
+    display:inline-flex !important;
+    align-items:center !important;
+}
+
+
+/* Similar-artist cards (both the artist-page grid and the sidebar)
+   have no native play button. We inject one that overlays the avatar
+   in the bottom-right corner. */
+
+.catalogue-overview-similar-artists-item-image,
+.artist-similar-artists-sidebar-item-image {
+    position:relative !important;
+}
+
+.spotify-similar-artist-button {
+    position:absolute !important;
+    bottom:6px !important;
+    right:6px !important;
+    z-index:3 !important;
+    background:transparent !important;
+    border:0 !important;
     padding:0 !important;
+    cursor:pointer !important;
+    filter:drop-shadow(0 2px 6px rgba(0,0,0,.55));
+}
+
+.catalogue-overview-similar-artists-item-image .spotify-similar-artist-button .spotify-custom-button,
+.catalogue-overview-similar-artists-item-image .spotify-similar-artist-button .spotify-custom-button svg {
+    width:44px !important;
+    height:44px !important;
+}
+
+.artist-similar-artists-sidebar-item-image .spotify-similar-artist-button .spotify-custom-button,
+.artist-similar-artists-sidebar-item-image .spotify-similar-artist-button .spotify-custom-button svg {
+    width:28px !important;
+    height:28px !important;
 }
 
 `;
@@ -274,7 +339,6 @@ button[data-spotify-replaced] {
     let hideTimer = null;
 
 
-    const SHOW_DELAY_MS = 280;
     const HIDE_DELAY_MS = 150;
     const MENU_GAP      = 8;
 
@@ -468,7 +532,7 @@ button[data-spotify-replaced] {
 
             showMenu(button);
 
-        }, SHOW_DELAY_MS);
+        }, getConfig().menuDelay);
 
     }
 
@@ -620,10 +684,19 @@ button[data-spotify-replaced] {
         }
 
 
+        // For the artist-page header button, keep Last.fm's native
+        // "PLAY ARTIST" text alongside the Spotify icon. Everywhere
+        // else, replace the whole button contents with just the icon.
+
+        const preservedText =
+            button.classList.contains("header-new-playlink")
+                ? (button.textContent.trim() || "Play Artist")
+                : null;
+
         button.innerHTML = `
 <span class="spotify-custom-button" title="Play on Spotify">
 ${SPOTIFY_ICON}
-</span>`;
+</span>${preservedText ? `<span>${preservedText}</span>` : ""}`;
 
 
         // Register the click in the capture phase so we beat any
@@ -641,7 +714,7 @@ ${SPOTIFY_ICON}
                         entity,
                         artist,
                         name,
-                        defaultAction
+                        getConfig().defaultAction || defaultAction
                     )
                 );
 
@@ -1012,10 +1085,111 @@ ${SPOTIFY_ICON}
 
 
 
+    function replaceSimilarArtistCards(){
+
+        // Last.fm doesn't render play buttons on similar-artist cards
+        // (neither in the artist-page grid nor in the sidebar), so we
+        // create one from scratch and overlay it on the avatar.
+
+        const cards =
+            document.querySelectorAll(
+                ".catalogue-overview-similar-artists-item-wrap:not([data-spotify-replaced])," +
+                ".artist-similar-artists-sidebar-item-wrap:not([data-spotify-replaced])"
+            );
+
+
+        cards.forEach(card => {
+
+            card.dataset.spotifyReplaced = "true";
+
+
+            const nameLink =
+                card.querySelector(".link-block-target");
+
+            if(!nameLink) return;
+
+
+            let pathname;
+            try {
+                pathname =
+                    new URL(
+                        nameLink.getAttribute("href") || nameLink.href,
+                        location.origin
+                    ).pathname;
+            } catch (_){
+                return;
+            }
+
+
+            const parts = parseMusicPath(pathname);
+
+            // Artist-only link (no album/track segment).
+            if(!parts || parts.second || parts.third) return;
+
+
+            const avatar =
+                card.querySelector(
+                    ".catalogue-overview-similar-artists-item-image," +
+                    ".artist-similar-artists-sidebar-item-image"
+                );
+
+            if(!avatar) return;
+
+
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "spotify-similar-artist-button";
+            button.setAttribute("aria-label", `Play ${parts.artist} on Spotify`);
+
+            avatar.appendChild(button);
+
+
+            attachSpotifyBehavior(
+                button,
+                "artist",
+                parts.artist,
+                null,
+                "play"
+            );
+
+        });
+
+    }
+
+
+
+    function shouldSkipCurrentPage(){
+
+        const cfg  = getConfig();
+        const path = location.pathname;
+
+        if (/^\/user\/[^/]+\/library/.test(path)) {
+            return cfg.skipLibraryPages ? "library" : null;
+        }
+
+        const parts = parseMusicPath(path);
+        if (parts) {
+            if (!parts.second) return cfg.skipArtistPages ? "artist" : null;
+            if (!parts.third)  return cfg.skipAlbumPages  ? "album"  : null;
+        }
+
+        return null;
+
+    }
+
+
+
     function replaceButtons(){
+
+        const skipReason = shouldSkipCurrentPage();
+        if (skipReason) {
+            log(`skipping injection (${skipReason} pages disabled in settings)`);
+            return;
+        }
 
         replaceTrackButtons();
         replaceStationButtons();
+        replaceSimilarArtistCards();
 
     }
 
