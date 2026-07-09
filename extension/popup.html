@@ -39,6 +39,10 @@
                 <input type="radio" name="defaultAction" value="queue">
                 <span>Queue</span>
             </label>
+            <label class="radio">
+                <input type="radio" name="defaultAction" value="like">
+                <span>Like</span>
+            </label>
         </div>
     </section>
 
@@ -50,32 +54,8 @@
                 <span class="label-text">Hover delay</span>
                 <span class="range-value" id="menuDelay-value"></span>
             </div>
-            <input type="range" id="menuDelay" min="0" max="1000" step="20">
+            <input type="range" id="menuDelay" min="0" max="100" step="1">
         </div>
-    </section>
-
-    <section>
-        <h2>Injection</h2>
-
-        <label class="toggle">
-            <input type="checkbox" id="skipArtistPages">
-            <span class="switch"></span>
-            <span class="label-text">Skip artist pages</span>
-        </label>
-
-        <label class="toggle">
-            <input type="checkbox" id="skipAlbumPages">
-            <span class="switch"></span>
-            <span class="label-text">Skip album pages</span>
-        </label>
-
-        <label class="toggle">
-            <input type="checkbox" id="skipLibraryPages">
-            <span class="switch"></span>
-            <span class="label-text">Skip library pages</span>
-        </label>
-
-        <p class="hint">Refresh Last.fm to apply page-skip changes.</p>
     </section>
 
     <footer>

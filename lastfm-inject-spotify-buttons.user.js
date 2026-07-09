@@ -31,9 +31,6 @@
     const CONFIG_DEFAULTS = {
         defaultAction:    "play",
         menuDelay:        280,
-        skipArtistPages:  false,
-        skipAlbumPages:   false,
-        skipLibraryPages: false,
     };
 
     function getConfig(){
@@ -48,124 +45,41 @@
 
     // ---------- styles ----------
 
+    // Icon and overlay-button sizes are driven by a single --lfs-size
+    // CSS custom property. Every per-container rule below just sets
+    // that variable (and any custom position); the shared button rules
+    // read it via var(--lfs-size, 32px). This means adding a new host
+    // is one small block, not four repeated width/height selectors.
+
     const style = document.createElement("style");
 
     style.textContent = `
 
+/* Inner icon (SVG wrapper) shared across every button we inject. */
 .spotify-custom-button {
     display:flex !important;
     align-items:center !important;
     justify-content:center !important;
-    width:32px !important;
-    height:32px !important;
-    transition:transform .12s ease;
+    width:var(--lfs-size, 32px) !important;
+    height:var(--lfs-size, 32px) !important;
+    opacity:.8;
+    transition:transform .12s ease, opacity .12s ease;
 }
-
 .spotify-custom-button svg {
     display:block !important;
-    width:32px !important;
-    height:32px !important;
+    width:var(--lfs-size, 32px) !important;
+    height:var(--lfs-size, 32px) !important;
 }
-
-.recs-feed-playlink .spotify-custom-button,
-.recs-feed-playlink .spotify-custom-button svg {
-    width:44px !important;
-    height:44px !important;
-}
+[data-spotify-replaced]:hover .spotify-custom-button { opacity:1; }
 
 
-.spotify-menu {
-    position:fixed;
-    display:none;
-
-    min-width:132px;
-
-    padding:4px;
-
-    background:rgba(24,24,24,.92);
-    backdrop-filter:blur(14px) saturate(140%);
-    -webkit-backdrop-filter:blur(14px) saturate(140%);
-
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:8px;
-
-    box-shadow:
-        0 10px 30px rgba(0,0,0,.55),
-        0 2px 6px rgba(0,0,0,.4);
-
-    z-index:2147483647 !important;
-
-    font-family:
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        Arial,
-        sans-serif;
-
-    font-size:13px;
-    font-weight:500;
-    letter-spacing:.1px;
-
-    color:#eee;
-
-    pointer-events:auto;
-
-    opacity:0;
-    transform:translateX(-4px);
-    transition:
-        opacity .12s ease,
-        transform .12s ease;
-}
-
-.spotify-menu.spotify-menu--shown {
-    opacity:1;
-    transform:translateX(0);
-}
-
-.spotify-menu-item {
-    display:flex;
-    align-items:center;
-    gap:10px;
-
-    padding:7px 10px;
-
-    border-radius:4px;
-
-    cursor:pointer;
-    white-space:nowrap;
-    user-select:none;
-
-    transition:
-        background .1s ease,
-        color .1s ease;
-}
-
-.spotify-menu-item svg {
-    width:14px;
-    height:14px;
-    flex-shrink:0;
-    fill:currentColor;
-    opacity:.9;
-}
-
-.spotify-menu-item:hover {
-    background:rgba(29,185,84,.16);
-    color:#1DB954;
-}
-
-
+/* Neutralize Last.fm's own ::before/::after play-glyph pseudo-elements
+   on any playlink we've taken over, and center our icon inside
+   whatever container Last.fm gave us. */
 a[data-spotify-replaced]::before,
 a[data-spotify-replaced]::after,
 button[data-spotify-replaced]::before,
-button[data-spotify-replaced]::after {
-    display:none !important;
-}
-
-
-/* Center the injected icon inside whatever container Last.fm gave us.
-   Some hosts (e.g. .image-overlay-playlink-link on video previews)
-   are much bigger than our 32px icon and would otherwise pin the
-   icon to the top-left corner. */
+button[data-spotify-replaced]::after { display:none !important; }
 
 a[data-spotify-replaced],
 button[data-spotify-replaced] {
@@ -175,39 +89,41 @@ button[data-spotify-replaced] {
 }
 
 
-/* Artist-page header "Play artist" button. Keep Last.fm's native
-   pill layout and text, just swap the inline play triangle for the
-   Spotify green circle at a smaller size. */
-
-.header-new-playlink .spotify-custom-button,
-.header-new-playlink .spotify-custom-button svg {
-    width:20px !important;
-    height:20px !important;
+/* Album/track cover-art play buttons (.desktop-playlink). Force a
+   centered 60x60 overlay on the cover cell and grow the inner icon
+   to fill it. Excludes:
+     - .recs-feed-playlink       (home recs feed — smaller 44px)
+     - .image-overlay-playlink-link (chart thumbnails — native 32px fits) */
+.desktop-playlink[data-spotify-replaced]:not(.recs-feed-playlink):not(.image-overlay-playlink-link) {
+    position:absolute !important;
+    top:50% !important;
+    left:50% !important;
+    transform:translate(-50%, -50%) !important;
+    margin:0 !important;
+    width:60px !important;
+    height:60px !important;
+    --lfs-size:56px;
 }
+.recs-feed-playlink { --lfs-size:44px; }
 
-.header-new-playlink .spotify-custom-button {
-    margin-right:6px;
-}
 
+/* Artist-page header "Play artist" button — keep native pill layout
+   and text, just swap the inline play triangle for the smaller
+   Spotify disc. */
 .header-new-playlink[data-spotify-replaced] {
     display:inline-flex !important;
     align-items:center !important;
+    --lfs-size:20px;
 }
+.header-new-playlink .spotify-custom-button { margin-right:6px; }
 
 
-/* Similar-artist cards (both the artist-page grid and the sidebar)
-   have no native play button. We inject one that overlays the avatar
-   in the bottom-right corner. */
-
-.catalogue-overview-similar-artists-item-image,
-.artist-similar-artists-sidebar-item-image {
-    position:relative !important;
-}
-
-.spotify-similar-artist-button {
+/* Shared style for buttons we inject from scratch (artist-avatar
+   overlays and the featured-artist top-right corner). Individual
+   host rules below set position + --lfs-size. */
+.spotify-similar-artist-button,
+.spotify-featured-artist-button {
     position:absolute !important;
-    bottom:6px !important;
-    right:6px !important;
     z-index:3 !important;
     background:transparent !important;
     border:0 !important;
@@ -215,17 +131,147 @@ button[data-spotify-replaced] {
     cursor:pointer !important;
     filter:drop-shadow(0 2px 6px rgba(0,0,0,.55));
 }
+.spotify-similar-artist-button { bottom:6px !important; right:6px !important; }
 
-.catalogue-overview-similar-artists-item-image .spotify-similar-artist-button .spotify-custom-button,
-.catalogue-overview-similar-artists-item-image .spotify-similar-artist-button .spotify-custom-button svg {
-    width:44px !important;
-    height:44px !important;
+
+/* Per-host positioning containers + sizes. Each of these:
+     - marks the host position:relative so our absolute button anchors
+       correctly,
+     - sets --lfs-size for the inner icon. */
+.catalogue-overview-similar-artists-item-image,
+.artist-similar-artists-sidebar-item-image,
+.music-more-artists-item-image,
+.artist-featured-items-item-image { position:relative !important; }
+
+.catalogue-overview-similar-artists-item-image { --lfs-size:44px; }
+.artist-similar-artists-sidebar-item-image     { --lfs-size:28px; }
+.music-more-artists-item-image                 { --lfs-size:44px; }
+.artist-featured-items-item-image              { --lfs-size:36px; }
+
+/* Small square cover thumbnails inside big featured-artist cards
+   ("Latest Release", "Popular this week"). Center the button on the
+   cover instead of the default bottom-right corner. */
+.artist-featured-items-item-image .spotify-similar-artist-button {
+    top:calc(50% - 18px) !important;
+    left:calc(50% - 18px) !important;
+    right:auto !important;
+    bottom:auto !important;
 }
 
-.artist-similar-artists-sidebar-item-image .spotify-similar-artist-button .spotify-custom-button,
-.artist-similar-artists-sidebar-item-image .spotify-similar-artist-button .spotify-custom-button svg {
-    width:28px !important;
-    height:28px !important;
+.music-recommended-artists-artist-avatar {
+    position:relative !important;
+    display:block !important;
+    --lfs-size:48px;
+}
+
+
+/* Chart Top-Artists rows have small round avatars with no native
+   play button. Scope .avatar to the chart image cell so we don't
+   grab avatars elsewhere. Center the button (via calc offsets, not
+   transform, so it composes with the hover-scale inline transform). */
+.globalchart-image .avatar,
+.weeklychart-image .avatar {
+    position:relative !important;
+    display:inline-block !important;
+    --lfs-size:26px;
+}
+.globalchart-image .avatar .spotify-similar-artist-button,
+.weeklychart-image .avatar .spotify-similar-artist-button {
+    top:calc(50% - 13px) !important;
+    left:calc(50% - 13px) !important;
+    right:auto !important;
+    bottom:auto !important;
+}
+
+
+/* /home/artists (and /music/+recommended/artists) recs-feed cards.
+   Anchor at the wrap so we sit above the title/description overlay
+   layer; pin top-left with a high z-index so clicks aren't swallowed
+   by the overlay. */
+.recs-feed-cover-image-wrap {
+    position:relative !important;
+    --lfs-size:44px;
+}
+.recs-feed-cover-image-wrap > .spotify-similar-artist-button {
+    top:8px !important;
+    left:8px !important;
+    right:auto !important;
+    bottom:auto !important;
+    z-index:20 !important;
+}
+
+
+/* Big featured-artist cards on /music ("Artists for you", "Hot right
+   now"). No native play button, so overlay one in the top-right. */
+.music-featured-item.music-featured-artist {
+    position:relative !important;
+    --lfs-size:52px;
+}
+.spotify-featured-artist-button {
+    top:14px !important;
+    right:14px !important;
+    filter:drop-shadow(0 2px 8px rgba(0,0,0,.6));
+}
+
+
+/* Hover menu (single shared element attached to <body>). */
+.spotify-menu {
+    position:fixed;
+    display:none;
+    min-width:132px;
+    padding:4px;
+    background:rgba(40,40,40,.78);
+    backdrop-filter:blur(18px) saturate(160%);
+    -webkit-backdrop-filter:blur(18px) saturate(160%);
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:8px;
+    box-shadow:
+        0 10px 30px rgba(0,0,0,.4),
+        0 2px 6px rgba(0,0,0,.25);
+    z-index:2147483647 !important;
+    font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size:13px;
+    font-weight:500;
+    letter-spacing:.1px;
+    color:#eee;
+    pointer-events:auto;
+    opacity:0;
+    transform:translateX(-4px);
+    transition:opacity .12s ease, transform .12s ease;
+}
+.spotify-menu.spotify-menu--shown {
+    opacity:1;
+    transform:translateX(0);
+}
+.spotify-menu-item {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:7px 10px;
+    border-radius:4px;
+    cursor:pointer;
+    white-space:nowrap;
+    user-select:none;
+    transition:background .1s ease, color .1s ease;
+}
+.spotify-menu-item svg {
+    width:14px;
+    height:14px;
+    flex-shrink:0;
+    fill:currentColor;
+    opacity:.9;
+}
+.spotify-menu-item:hover {
+    background:rgba(29,185,84,.16);
+    color:#1DB954;
+}
+
+
+/* Hide Last.fm's "Play all" button in the Similar Artists section
+   header — its station URL is just the current artist, so it
+   duplicates the main PLAY ARTIST button. */
+section:has(> ol.catalogue-overview-similar-artists) .section-controls .inline-section-control {
+    display:none !important;
 }
 
 `;
@@ -236,17 +282,19 @@ button[data-spotify-replaced] {
 
     // ---------- icon ----------
 
-    const SPOTIFY_ICON = `
-<svg viewBox="0 0 32 32"
-     xmlns="http://www.w3.org/2000/svg"
-     aria-hidden="true">
+    // Every icon shares the green Spotify disc. Play and like also
+    // overlay the three wave lines from the Spotify wordmark; queue
+    // drops them because horizontal wave strokes would clash visually
+    // with the horizontal queue-list bars.
 
+    const SPOTIFY_DISC = `
 <circle
     cx="16"
     cy="16"
     r="16"
-    fill="#1DB954"/>
+    fill="#1DB954"/>`;
 
+    const SPOTIFY_WAVES = `
 <path
     d="M8 12.5C14 10.5 21 11 25 13"
     fill="none"
@@ -266,13 +314,45 @@ button[data-spotify-replaced] {
     fill="none"
     stroke="#000"
     stroke-width="2"
-    stroke-linecap="round"/>
+    stroke-linecap="round"/>`;
 
+    const SPOTIFY_GLYPHS = {
+
+        play: `${SPOTIFY_WAVES}
 <path
     d="M13 9L13 23L23 16Z"
-    fill="#fff"/>
+    fill="#fff"/>`,
 
+        queue: `
+<g transform="translate(4 4) scale(0.75)">
+<path
+    d="M9 11.5h14M9 16h14M9 20.5h9"
+    fill="none"
+    stroke="#fff"
+    stroke-width="2.4"
+    stroke-linecap="round"/>
+</g>`,
+
+        like: `${SPOTIFY_WAVES}
+<g transform="translate(4 4) scale(0.75)">
+<path
+    d="M16 24c-6.2-4.5-9.5-7.4-9.5-11.6 0-2.7 2-4.8 4.7-4.8 1.8 0 3.5 1 4.8 2.7 1.3-1.7 3-2.7 4.8-2.7 2.7 0 4.7 2.1 4.7 4.8 0 4.2-3.3 7.1-9.5 11.6z"
+    fill="#fff"/>
+</g>`,
+
+    };
+
+    function spotifyIcon(action){
+
+        const glyph = SPOTIFY_GLYPHS[action] || SPOTIFY_GLYPHS.play;
+
+        return `
+<svg viewBox="0 0 32 32"
+     xmlns="http://www.w3.org/2000/svg"
+     aria-hidden="true">${SPOTIFY_DISC}${glyph}
 </svg>`;
+
+    }
 
 
 
@@ -526,13 +606,20 @@ button[data-spotify-replaced] {
             clearTimeout(showTimer);
 
 
+        // Popup slider stores `null` when the user drags to the far
+        // right ("Off"); treat that as "hover menu disabled".
+
+        const delay = getConfig().menuDelay;
+        if(delay === null || delay === undefined || delay < 0) return;
+
+
         showTimer = setTimeout(()=>{
 
             showTimer = null;
 
             showMenu(button);
 
-        }, getConfig().menuDelay);
+        }, delay);
 
     }
 
@@ -635,23 +722,15 @@ button[data-spotify-replaced] {
         // listeners (which fire on document.body in the capture phase
         // and would launch Last.fm's own player) no longer match this
         // element. We've already extracted everything we need from the
-        // data-* attributes.
+        // data-* attributes, so nuke them too — anything Last.fm's
+        // player module keys off of should be gone by the time we're
+        // done.
 
-        button.classList.remove(
-            "js-playlink",
-            "js-playlink-station"
-        );
+        button.classList.remove("js-playlink", "js-playlink-station");
 
-        delete button.dataset.stationUrl;
-        delete button.dataset.trackName;
-        delete button.dataset.trackUrl;
-        delete button.dataset.artistName;
-        delete button.dataset.artistUrl;
-        delete button.dataset.youtubeId;
-        delete button.dataset.youtubeUrl;
-        delete button.dataset.playlinkAffiliate;
-        delete button.dataset.analyticsAction;
-        delete button.dataset.analyticsLabel;
+        for (const key of Object.keys(button.dataset)) {
+            if (key !== "spotifyReplaced") delete button.dataset[key];
+        }
 
 
         // Last.fm's `components/link-block` module attaches a click
@@ -693,9 +772,11 @@ button[data-spotify-replaced] {
                 ? (button.textContent.trim() || "Play Artist")
                 : null;
 
+        const currentAction = getConfig().defaultAction || defaultAction;
+
         button.innerHTML = `
-<span class="spotify-custom-button" title="Play on Spotify">
-${SPOTIFY_ICON}
+<span class="spotify-custom-button" title="">
+${spotifyIcon(currentAction)}
 </span>${preservedText ? `<span>${preservedText}</span>` : ""}`;
 
 
@@ -968,7 +1049,7 @@ ${SPOTIFY_ICON}
                 if(!parts) return null;
 
 
-                return stationPartsToInfo(parts);
+                return musicPartsToInfo(parts);
 
             }
         },
@@ -1003,7 +1084,7 @@ ${SPOTIFY_ICON}
                 if(!parts) return null;
 
 
-                return stationPartsToInfo(parts);
+                return musicPartsToInfo(parts);
 
             }
         }
@@ -1011,7 +1092,7 @@ ${SPOTIFY_ICON}
     ];
 
 
-    function stationPartsToInfo(parts){
+    function musicPartsToInfo(parts){
 
 
         // Artist-only radio.
@@ -1060,6 +1141,20 @@ ${SPOTIFY_ICON}
         buttons.forEach(button=>{
 
 
+            // Skip the "Play all" button in the Similar Artists section
+            // header — it just plays the current artist again, so it
+            // duplicates the main PLAY ARTIST button. It's also hidden
+            // via CSS, but skip here too so we don't attach behavior.
+            if (
+                button.classList.contains("inline-section-control") &&
+                button
+                    .closest("section")
+                    ?.querySelector("ol.catalogue-overview-similar-artists")
+            ) {
+                return;
+            }
+
+
             const info =
                 tryStrategies(
                     "station button",
@@ -1085,95 +1180,95 @@ ${SPOTIFY_ICON}
 
 
 
-    function replaceSimilarArtistCards(){
+    // ----- music-card overlays -----
 
-        // Last.fm doesn't render play buttons on similar-artist cards
-        // (neither in the artist-page grid nor in the sidebar), so we
-        // create one from scratch and overlay it on the avatar.
+    // Last.fm doesn't render play buttons on many cover-art cards
+    // (similar-artist grids, chart rows, recs feeds, featured tracks
+    // on artist pages, etc.). We inject one per card; each config
+    // below describes:
+    //   card:    outer selector to enumerate (with :not(replaced) added)
+    //   nameSel: link inside the card whose href gives the music path
+    //   hostSel: where to append the button (null = card itself)
+    //   btnCls:  which of the two overlay classes to use
+    // Entity (artist/album/track) is derived from the href pattern via
+    // musicPartsToInfo, so the same config works for any card type.
 
-        const cards =
-            document.querySelectorAll(
-                ".catalogue-overview-similar-artists-item-wrap:not([data-spotify-replaced])," +
-                ".artist-similar-artists-sidebar-item-wrap:not([data-spotify-replaced])"
-            );
+    const MUSIC_CARD_CONFIGS = [
+        // Similar-artist grid + sidebar, /music extras, recommended lists.
+        { card: ".catalogue-overview-similar-artists-item-wrap",  nameSel: ".link-block-target",                  hostSel: ".catalogue-overview-similar-artists-item-image", btnCls: "spotify-similar-artist-button" },
+        { card: ".artist-similar-artists-sidebar-item-wrap",      nameSel: ".link-block-target",                  hostSel: ".artist-similar-artists-sidebar-item-image",     btnCls: "spotify-similar-artist-button" },
+        { card: ".music-more-artists-item-wrap",                  nameSel: ".link-block-target",                  hostSel: ".music-more-artists-item-image",                 btnCls: "spotify-similar-artist-button" },
+        { card: ".music-recommended-artists-artist",              nameSel: ".link-block-target",                  hostSel: ".music-recommended-artists-artist-avatar",       btnCls: "spotify-similar-artist-button" },
 
+        // Featured track/album cards on an artist page ("Popular this
+        // week", "Latest release", etc.). Track/album entity, cover-only
+        // host, no native playlink.
+        { card: ".artist-featured-items-item-wrap",               nameSel: ".link-block-target",                  hostSel: ".artist-featured-items-item-image",              btnCls: "spotify-similar-artist-button" },
 
-        cards.forEach(card => {
+        // /home/artists + /music/+recommended/artists recs-feed cards.
+        { card: ".recs-feed-item--artist",                        nameSel: ".link-block-target",                  hostSel: ".recs-feed-cover-image-wrap",                    btnCls: "spotify-similar-artist-button" },
 
-            card.dataset.spotifyReplaced = "true";
+        // Chart artist rows. The .js-link-block class lives on the tr
+        // only for artist rows, so it disambiguates from track/album.
+        { card: "tr.globalchart-item.js-link-block",              nameSel: ".link-block-target",                  hostSel: ".globalchart-image .avatar",                     btnCls: "spotify-similar-artist-button" },
+        { card: "tr.weeklychart-item.js-link-block",              nameSel: ".link-block-target",                  hostSel: ".weeklychart-image .avatar",                     btnCls: "spotify-similar-artist-button" },
 
-
-            const nameLink =
-                card.querySelector(".link-block-target");
-
-            if(!nameLink) return;
-
-
-            let pathname;
-            try {
-                pathname =
-                    new URL(
-                        nameLink.getAttribute("href") || nameLink.href,
-                        location.origin
-                    ).pathname;
-            } catch (_){
-                return;
-            }
-
-
-            const parts = parseMusicPath(pathname);
-
-            // Artist-only link (no album/track segment).
-            if(!parts || parts.second || parts.third) return;
+        // Big featured-artist cards on /music. Button lives on the card
+        // itself (top-right corner), not on any inner avatar.
+        { card: ".music-featured-item.music-featured-artist",     nameSel: ".music-featured-item-heading-link",   hostSel: null,                                             btnCls: "spotify-featured-artist-button" },
+    ];
 
 
-            const avatar =
-                card.querySelector(
-                    ".catalogue-overview-similar-artists-item-image," +
-                    ".artist-similar-artists-sidebar-item-image"
-                );
+    function replaceMusicCards(){
 
-            if(!avatar) return;
+        for(const cfg of MUSIC_CARD_CONFIGS){
 
+            document
+                .querySelectorAll(`${cfg.card}:not([data-spotify-replaced])`)
+                .forEach(card => injectMusicOverlay(card, cfg));
 
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "spotify-similar-artist-button";
-            button.setAttribute("aria-label", `Play ${parts.artist} on Spotify`);
-
-            avatar.appendChild(button);
-
-
-            attachSpotifyBehavior(
-                button,
-                "artist",
-                parts.artist,
-                null,
-                "play"
-            );
-
-        });
+        }
 
     }
 
 
+    function injectMusicOverlay(card, cfg){
 
-    function shouldSkipCurrentPage(){
+        card.dataset.spotifyReplaced = "true";
 
-        const cfg  = getConfig();
-        const path = location.pathname;
+        const nameLink = card.querySelector(cfg.nameSel);
+        if(!nameLink) return;
 
-        if (/^\/user\/[^/]+\/library/.test(path)) {
-            return cfg.skipLibraryPages ? "library" : null;
+        let pathname;
+        try {
+            pathname =
+                new URL(
+                    nameLink.getAttribute("href") || nameLink.href,
+                    location.origin
+                ).pathname;
+        } catch (_) {
+            return;
         }
 
-        const parts = parseMusicPath(path);
-        if (parts) {
-            if (!parts.second) return cfg.skipArtistPages ? "artist" : null;
-            if (!parts.third)  return cfg.skipAlbumPages  ? "album"  : null;
-        }
+        const parts = parseMusicPath(pathname);
+        if(!parts) return;
 
-        return null;
+        const info = musicPartsToInfo(parts);
+
+        const host = cfg.hostSel ? card.querySelector(cfg.hostSel) : card;
+        if(!host) return;
+
+        const label = info.name
+            ? `Play ${info.name} by ${info.artist} on Spotify`
+            : `Play ${info.artist} on Spotify`;
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = cfg.btnCls;
+        button.setAttribute("aria-label", label);
+        host.appendChild(button);
+
+        attachSpotifyBehavior(button, info.entity, info.artist, info.name, "play");
 
     }
 
@@ -1181,15 +1276,9 @@ ${SPOTIFY_ICON}
 
     function replaceButtons(){
 
-        const skipReason = shouldSkipCurrentPage();
-        if (skipReason) {
-            log(`skipping injection (${skipReason} pages disabled in settings)`);
-            return;
-        }
-
         replaceTrackButtons();
         replaceStationButtons();
-        replaceSimilarArtistCards();
+        replaceMusicCards();
 
     }
 
@@ -1228,6 +1317,25 @@ ${SPOTIFY_ICON}
                 subtree:true
             }
         );
+
+
+    // Live-refresh injected icons when the extension popup changes the
+    // default click action. The bridge dispatches this CustomEvent on
+    // storage change; under Tampermonkey it never fires and the icon
+    // reflects the CONFIG_DEFAULTS at page load.
+
+    window.addEventListener("__lfs-config-changed", e => {
+
+        if (!e.detail || !e.detail.defaultAction) return;
+
+        const action = getConfig().defaultAction || "play";
+        const svg    = spotifyIcon(action);
+
+        document
+            .querySelectorAll("[data-spotify-replaced] .spotify-custom-button")
+            .forEach(span => { span.innerHTML = svg; });
+
+    });
 
 
     // Explicit hook for SPA-style navigations. The observer above

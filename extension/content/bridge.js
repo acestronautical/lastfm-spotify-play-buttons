@@ -21,9 +21,6 @@ const DEFAULTS = {
     autoClose:        true,
     defaultAction:    "play",
     menuDelay:        280,
-    skipArtistPages:  false,
-    skipAlbumPages:   false,
-    skipLibraryPages: false,
 };
 
 
@@ -51,4 +48,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     for (const key of Object.keys(changes)) {
         window.__LFS_CONFIG[key] = changes[key].newValue;
     }
+    window.dispatchEvent(new CustomEvent("__lfs-config-changed", {
+        detail: changes,
+    }));
 });

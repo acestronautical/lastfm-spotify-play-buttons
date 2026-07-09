@@ -7,9 +7,6 @@ const DEFAULTS = {
     autoClose:        true,
     defaultAction:    "play",
     menuDelay:        280,
-    skipArtistPages:  false,
-    skipAlbumPages:   false,
-    skipLibraryPages: false,
 };
 
 const CONTROLS = [
@@ -17,9 +14,6 @@ const CONTROLS = [
     { key: "autoClose",        type: "checkbox" },
     { key: "defaultAction",    type: "radio"    },
     { key: "menuDelay",        type: "range"    },
-    { key: "skipArtistPages",  type: "checkbox" },
-    { key: "skipAlbumPages",   type: "checkbox" },
-    { key: "skipLibraryPages", type: "checkbox" },
 ];
 
 const REPO_URL =
@@ -73,14 +67,41 @@ function bindRange(key, value){
     const el = document.getElementById(key);
     const label = document.getElementById(`${key}-value`);
     if(!el) return;
-    el.value = value;
-    if(label) label.textContent = `${value} ms`;
+
+    // Squared curve gives finer resolution near zero — a 0-100 slider
+    // position maps to 0-MAX_MS. Position 100 is a sentinel for "off":
+    // stored as null, injector skips the menu entirely.
+
+    const MAX_MS    = 2000;
+    const POSITIONS = Number(el.max);        // 100
+    const CURVE     = 2;
+    const CURVE_MAX = POSITIONS - 1;         // 99
+
+    function msFromPos(pos){
+        if(pos >= POSITIONS) return null;
+        return Math.round(Math.pow(pos / CURVE_MAX, CURVE) * MAX_MS);
+    }
+
+    function posFromMs(ms){
+        if(ms === null || ms === undefined) return POSITIONS;
+        if(ms <= 0) return 0;
+        const p = Math.round(Math.pow(ms / MAX_MS, 1 / CURVE) * CURVE_MAX);
+        return Math.max(0, Math.min(CURVE_MAX, p));
+    }
+
+    function renderLabel(ms){
+        if(!label) return;
+        label.textContent = (ms === null) ? "Off" : `${ms} ms`;
+    }
+
+    el.value = posFromMs(value);
+    renderLabel(msFromPos(Number(el.value)));
+
     el.addEventListener("input", () => {
-        const n = Number(el.value);
-        if(label) label.textContent = `${n} ms`;
+        renderLabel(msFromPos(Number(el.value)));
     });
     el.addEventListener("change", () => {
-        chrome.storage.local.set({ [key]: Number(el.value) });
+        chrome.storage.local.set({ [key]: msFromPos(Number(el.value)) });
     });
 }
 
