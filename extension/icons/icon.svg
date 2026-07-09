@@ -1,0 +1,24 @@
+<svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <!-- Extension icon: rounded square split vertically into Last.fm red
+       (left) and Spotify green (right), with a white play triangle
+       straddling the divide. Communicates the extension's purpose
+       (bridge Last.fm → Spotify) using both brand colors, reads
+       clearly all the way down to 16x16. -->
+
+  <defs>
+    <clipPath id="rounded">
+      <rect width="128" height="128" rx="24" ry="24"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#rounded)">
+    <!-- Left half: Last.fm red -->
+    <rect width="64" height="128" fill="#D51007"/>
+
+    <!-- Right half: Spotify green -->
+    <rect x="64" width="64" height="128" fill="#1DB954"/>
+
+    <!-- White play triangle centered across the color divide -->
+    <path d="M48 40 L48 88 L94 64 Z" fill="#fff"/>
+  </g>
+</svg>
