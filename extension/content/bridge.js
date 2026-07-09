@@ -40,7 +40,31 @@ window.GM_openInTab = function (url, opts) {
 
 
 chrome.storage.local.get(DEFAULTS).then(cfg => {
-    Object.assign(window.__LFS_CONFIG, cfg);
+
+    // Compute a "changes"-shaped object comparing the just-loaded
+    // values against the synchronously-seeded defaults so the injector
+    // sees the same shape it gets on storage.onChanged. Needed because
+    // the initial hydration is async — if it resolves AFTER the
+    // injector's first replaceButtons() call, icons render with
+    // defaults and won't re-render without a change signal.
+
+    const changes = {};
+
+    for (const key of Object.keys(cfg)) {
+        const oldValue = window.__LFS_CONFIG[key];
+        const newValue = cfg[key];
+        window.__LFS_CONFIG[key] = newValue;
+        if (oldValue !== newValue) {
+            changes[key] = { oldValue, newValue };
+        }
+    }
+
+    if (Object.keys(changes).length > 0) {
+        window.dispatchEvent(new CustomEvent("__lfs-config-changed", {
+            detail: changes,
+        }));
+    }
+
 });
 
 
