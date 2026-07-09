@@ -21,6 +21,7 @@ const DEFAULTS = {
     autoClose:        true,
     defaultAction:    "play",
     menuDelay:        280,
+    entityBadges:     false,
 };
 
 

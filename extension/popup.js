@@ -7,6 +7,7 @@ const DEFAULTS = {
     autoClose:        true,
     defaultAction:    "play",
     menuDelay:        280,
+    entityBadges:     false,
 };
 
 const CONTROLS = [
@@ -14,6 +15,7 @@ const CONTROLS = [
     { key: "autoClose",        type: "checkbox" },
     { key: "defaultAction",    type: "radio"    },
     { key: "menuDelay",        type: "range"    },
+    { key: "entityBadges",     type: "checkbox" },
 ];
 
 const REPO_URL =
