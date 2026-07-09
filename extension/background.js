@@ -1,8 +1,13 @@
 // Background service worker.
 //
-// The injector content script talks to us with { type: 'openTab', url, opts }
-// so we can create Spotify puppeteer tabs. Content scripts cannot create
-// tabs directly under MV3 — chrome.tabs.create is only available here.
+// Content scripts talk to us with:
+//   { type: 'openTab', url, opts }  → chrome.tabs.create for Spotify tabs
+//   { type: 'closeTab' }            → chrome.tabs.remove for the sender's tab
+//                                     (needed because window.close() is
+//                                     blocked on tabs opened via
+//                                     chrome.tabs.create — the browser
+//                                     only allows close on windows opened
+//                                     by window.open() from a script).
 
 const SETTING_DEFAULTS = {
     foreground: false,
@@ -10,7 +15,23 @@ const SETTING_DEFAULTS = {
 
 chrome.runtime.onMessage.addListener((msg, sender) => {
 
-    if (!msg || msg.type !== "openTab" || typeof msg.url !== "string") {
+    if (!msg || typeof msg.type !== "string") {
+        return;
+    }
+
+
+    if (msg.type === "closeTab") {
+
+        if (sender.tab && typeof sender.tab.id === "number") {
+            chrome.tabs.remove(sender.tab.id);
+        }
+
+        return;
+
+    }
+
+
+    if (msg.type !== "openTab" || typeof msg.url !== "string") {
         return;
     }
 
@@ -25,10 +46,9 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
             active: settings.foreground === true || opts.active === true,
         };
 
-        // Preserve the "opened by this tab" relationship so the puppeteer
-        // tab's window.close() succeeds and the browser returns focus to
-        // the opener when it closes — mirrors Tampermonkey's
-        // { setParent: true }.
+        // Preserve the "opened by this tab" relationship so focus returns
+        // to the opener when the puppeteer tab closes — mirrors
+        // Tampermonkey's { setParent: true }.
         if (sender.tab && typeof sender.tab.id === "number") {
             createProps.openerTabId = sender.tab.id;
         }

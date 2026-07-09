@@ -135,6 +135,24 @@
 
         setTimeout(()=>{
 
+            // Extension path: window.close() is blocked on tabs opened
+            // via chrome.tabs.create (the browser only allows close on
+            // windows opened by window.open()). Route through the
+            // service worker's chrome.tabs.remove instead.
+            //
+            // Under Tampermonkey chrome.runtime.id is undefined and we
+            // fall back to window.close(), which works because
+            // GM_openInTab establishes a real opener relationship.
+
+            if (typeof chrome !== "undefined" &&
+                chrome.runtime &&
+                chrome.runtime.id) {
+
+                chrome.runtime.sendMessage({ type: "closeTab" });
+                return;
+
+            }
+
             window.close();
 
         }, CLOSE_MS);
