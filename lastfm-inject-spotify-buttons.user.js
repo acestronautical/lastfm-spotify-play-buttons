@@ -257,13 +257,13 @@ button[data-spotify-replaced] {
    .chartlist-play-button playlinks that replaceTrackButtons swapped.
    The second rule strips Last.fm's per-element sizing/padding/
    background-image so both variants render as identical
-   22x22 transparent hosts around our SVG. */
+   28x28 transparent hosts around our SVG. */
 .chartlist-play {
-    --lfs-size:22px;
+    --lfs-size:28px;
 }
 .chartlist-play [data-spotify-replaced] {
-    width:var(--lfs-size, 22px) !important;
-    height:var(--lfs-size, 22px) !important;
+    width:var(--lfs-size, 28px) !important;
+    height:var(--lfs-size, 28px) !important;
     padding:0 !important;
     margin:0 !important;
     min-width:0 !important;
