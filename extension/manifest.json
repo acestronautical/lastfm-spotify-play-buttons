@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Last.fm → Spotify Play Buttons",
-    "version": "0.2.7",
+    "version": "0.2.8",
     "description": "Replace Last.fm play buttons with Spotify controls; auto-play the matched result on Spotify.",
     "permissions": ["tabs", "storage"],
     "host_permissions": [

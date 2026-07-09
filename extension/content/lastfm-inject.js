@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.9
+// @version      3.10
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -220,6 +220,34 @@ button[data-spotify-replaced] {
     top:14px !important;
     right:14px !important;
     filter:drop-shadow(0 2px 8px rgba(0,0,0,.6));
+}
+
+
+/* New Releases grid on /music. Many rows ship without Last.fm's own
+   .music-releases-item-playlink (rows that instead have .js-link-block
+   on their inner div); overlay a centered button on the cover for
+   those. Rows that DO have a native playlink are already swapped by
+   replaceStationButtons and picked up by the shared .desktop-playlink
+   rule higher up, so we don't touch them here.
+
+   Also hide the injected button until the card is hovered, to match
+   Last.fm's own show-on-hover behaviour for the native playlink
+   variant (otherwise our injected rows look busier than the swapped
+   ones in the same grid). */
+.music-releases-item-image {
+    position:relative !important;
+    --lfs-size:56px;
+}
+.music-releases-item-image .spotify-similar-artist-button {
+    top:calc(50% - 28px) !important;
+    left:calc(50% - 28px) !important;
+    right:auto !important;
+    bottom:auto !important;
+    opacity:0;
+    transition:opacity .12s ease;
+}
+.music-releases-item-wrap:hover .music-releases-item-image .spotify-similar-artist-button {
+    opacity:1;
 }
 
 
@@ -1317,6 +1345,12 @@ ${spotifyIcon(currentAction, entity)}
         // Big featured-artist cards on /music. Button lives on the card
         // itself (top-right corner), not on any inner avatar.
         { card: ".music-featured-item.music-featured-artist",     nameSel: ".music-featured-item-heading-link",   hostSel: null,                                             btnCls: "spotify-featured-artist-button" },
+
+        // New Releases grid on /music. Skip cards that already have
+        // a native .music-releases-item-playlink (which
+        // replaceStationButtons already swapped) so we don't double-
+        // inject.
+        { card: ".music-releases-item-wrap:not(:has(.music-releases-item-playlink))", nameSel: ".music-releases-item-name .link-block-target", hostSel: ".music-releases-item-image", btnCls: "spotify-similar-artist-button" },
 
         // Album-page tracklist rows. Last.fm leaves the .chartlist-play
         // cell empty on album pages; fill each empty cell with a compact
