@@ -38,6 +38,20 @@
 <path d="M15.6 12.6c0-1.3-1.1-2.1-2.4-2.1-.5 0-1 .1-1.4.3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".55" stroke-linecap="round"/>
 </svg>`,
 
+        // Vinyl-disc silhouette with a spark — "what's new and
+        // worth sampling". Outer ring is the record edge, inner
+        // ring the label, dot is the spindle. Menu items render
+        // with currentColor so we can't cut real transparent
+        // grooves — using stroked rings instead lets the dark
+        // menu background show through as negative space.
+        queueNewReleases: `
+<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<circle cx="7" cy="8.5" r="5.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+<circle cx="7" cy="8.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1"/>
+<circle cx="7" cy="8.5" r=".9" fill="currentColor"/>
+<path d="M13 2.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4L11 4.1l1.4-.5z" fill="currentColor"/>
+</svg>`,
+
     };
 
 
@@ -88,6 +102,11 @@ ${NAV_MENU_HAMBURGER_SVG}
 <span class="spotify-nav-menu-label">Queue random neighbour tracks</span>
 </button>
 <div class="spotify-nav-menu-status" data-status-for="queue-neighbour-mix" hidden></div>
+<button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="queue-new-releases">
+<span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.queueNewReleases}</span>
+<span class="spotify-nav-menu-label">Queue new releases</span>
+</button>
+<div class="spotify-nav-menu-status" data-status-for="queue-new-releases" hidden></div>
 <button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="go-neighbour">
 <span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.queueNeighbour}</span>
 <span class="spotify-nav-menu-label">Go to a random neighbour</span>
@@ -152,6 +171,9 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         wrap.querySelector('[data-action="queue-neighbour-mix"]')
             .addEventListener("click", onMenuQueueNeighbourMix);
+
+        wrap.querySelector('[data-action="queue-new-releases"]')
+            .addEventListener("click", onMenuQueueNewReleases);
 
         wrap.querySelector('[data-action="go-neighbour"]')
             .addEventListener("click", onMenuGoToNeighbour);

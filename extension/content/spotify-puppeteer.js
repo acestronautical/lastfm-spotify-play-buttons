@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotify Last.fm Puppeteer
 // @namespace    https://github.com/
-// @version      1.7
+// @version      1.8
 // @description  Puppeteer Spotify's search UI to perform actions launched from Last.fm
 // @match        https://open.spotify.com/search/*
 // @grant        none
@@ -794,7 +794,4 @@
         run();
 
     }
-
-
-})();
 })();

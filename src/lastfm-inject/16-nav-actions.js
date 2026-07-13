@@ -245,6 +245,85 @@
     }
 
 
+    // ---------- action: Queue new releases (top track per album) ----------
+
+    async function onMenuQueueNewReleases(e){
+
+        e.preventDefault();
+        e.stopPropagation();
+
+
+        const item = e.currentTarget;
+
+        if(item.getAttribute("aria-disabled") === "true") return;
+
+        setMenuItemBusy(item, true);
+        setMenuStatus("queue-new-releases", "Loading your history…");
+
+
+        const me = getCurrentUsername();
+
+
+        let tracks = [];
+
+        try {
+
+            const scrobbleSet =
+                me ? await getScrobbleSet(me) : new Set();
+
+            setMenuStatus(
+                "queue-new-releases",
+                "Loading new releases…"
+            );
+
+            tracks = await collectNewReleasesTopTracks(
+                queueBatchCap(), scrobbleSet
+            );
+
+        } catch (err) {
+
+            log("Queue new releases failed:", err);
+
+        }
+
+
+        if(!tracks.length){
+            setMenuStatus(
+                "queue-new-releases",
+                "No new releases found"
+            );
+            setTimeout(
+                ()=> setMenuStatus("queue-new-releases", null),
+                2500
+            );
+            setMenuItemBusy(item, false);
+            return;
+        }
+
+
+        const url = makeSpotifyBatchUrl(tracks, "queue");
+
+        setMenuStatus(
+            "queue-new-releases",
+            `Queuing ${tracks.length} track${tracks.length === 1 ? "" : "s"}…`
+        );
+
+        log(
+            `Queuing ${tracks.length} new-release top track(s) to Spotify`
+        );
+
+        openSpotify(url);
+
+
+        setTimeout(()=>{
+            setMenuStatus("queue-new-releases", null);
+            setMenuItemBusy(item, false);
+            setNavMenuOpen(false);
+        }, 1800);
+
+    }
+
+
     // ---------- action: Go to a random neighbour ----------
 
     async function onMenuGoToNeighbour(e){

@@ -534,7 +534,6 @@ section:has(> ol.catalogue-overview-similar-artists) .section-controls .inline-s
     width:12px !important;
     height:12px !important;
     display:block !important;
-    fill:currentColor !important;
 }
 
 `;

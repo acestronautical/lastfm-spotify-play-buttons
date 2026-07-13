@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.13
+// @version      3.14
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -584,7 +584,6 @@ section:has(> ol.catalogue-overview-similar-artists) .section-controls .inline-s
     width:12px !important;
     height:12px !important;
     display:block !important;
-    fill:currentColor !important;
 }
 
 `;
@@ -1859,6 +1858,20 @@ ${spotifyIcon(currentAction, entity)}
 <path d="M15.6 12.6c0-1.3-1.1-2.1-2.4-2.1-.5 0-1 .1-1.4.3" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".55" stroke-linecap="round"/>
 </svg>`,
 
+        // Vinyl-disc silhouette with a spark — "what's new and
+        // worth sampling". Outer ring is the record edge, inner
+        // ring the label, dot is the spindle. Menu items render
+        // with currentColor so we can't cut real transparent
+        // grooves — using stroked rings instead lets the dark
+        // menu background show through as negative space.
+        queueNewReleases: `
+<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<circle cx="7" cy="8.5" r="5.6" fill="none" stroke="currentColor" stroke-width="1.4"/>
+<circle cx="7" cy="8.5" r="2.4" fill="none" stroke="currentColor" stroke-width="1"/>
+<circle cx="7" cy="8.5" r=".9" fill="currentColor"/>
+<path d="M13 2.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4L11 4.1l1.4-.5z" fill="currentColor"/>
+</svg>`,
+
     };
 
 
@@ -1909,6 +1922,11 @@ ${NAV_MENU_HAMBURGER_SVG}
 <span class="spotify-nav-menu-label">Queue random neighbour tracks</span>
 </button>
 <div class="spotify-nav-menu-status" data-status-for="queue-neighbour-mix" hidden></div>
+<button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="queue-new-releases">
+<span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.queueNewReleases}</span>
+<span class="spotify-nav-menu-label">Queue new releases</span>
+</button>
+<div class="spotify-nav-menu-status" data-status-for="queue-new-releases" hidden></div>
 <button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="go-neighbour">
 <span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.queueNeighbour}</span>
 <span class="spotify-nav-menu-label">Go to a random neighbour</span>
@@ -1973,6 +1991,9 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         wrap.querySelector('[data-action="queue-neighbour-mix"]')
             .addEventListener("click", onMenuQueueNeighbourMix);
+
+        wrap.querySelector('[data-action="queue-new-releases"]')
+            .addEventListener("click", onMenuQueueNewReleases);
 
         wrap.querySelector('[data-action="go-neighbour"]')
             .addEventListener("click", onMenuGoToNeighbour);
@@ -2264,6 +2285,85 @@ ${NAV_MENU_HAMBURGER_SVG}
             setMenuItemBusy(item, false);
             setNavMenuOpen(false);
         }, 2000);
+
+    }
+
+
+    // ---------- action: Queue new releases (top track per album) ----------
+
+    async function onMenuQueueNewReleases(e){
+
+        e.preventDefault();
+        e.stopPropagation();
+
+
+        const item = e.currentTarget;
+
+        if(item.getAttribute("aria-disabled") === "true") return;
+
+        setMenuItemBusy(item, true);
+        setMenuStatus("queue-new-releases", "Loading your history…");
+
+
+        const me = getCurrentUsername();
+
+
+        let tracks = [];
+
+        try {
+
+            const scrobbleSet =
+                me ? await getScrobbleSet(me) : new Set();
+
+            setMenuStatus(
+                "queue-new-releases",
+                "Loading new releases…"
+            );
+
+            tracks = await collectNewReleasesTopTracks(
+                queueBatchCap(), scrobbleSet
+            );
+
+        } catch (err) {
+
+            log("Queue new releases failed:", err);
+
+        }
+
+
+        if(!tracks.length){
+            setMenuStatus(
+                "queue-new-releases",
+                "No new releases found"
+            );
+            setTimeout(
+                ()=> setMenuStatus("queue-new-releases", null),
+                2500
+            );
+            setMenuItemBusy(item, false);
+            return;
+        }
+
+
+        const url = makeSpotifyBatchUrl(tracks, "queue");
+
+        setMenuStatus(
+            "queue-new-releases",
+            `Queuing ${tracks.length} track${tracks.length === 1 ? "" : "s"}…`
+        );
+
+        log(
+            `Queuing ${tracks.length} new-release top track(s) to Spotify`
+        );
+
+        openSpotify(url);
+
+
+        setTimeout(()=>{
+            setMenuStatus("queue-new-releases", null);
+            setMenuItemBusy(item, false);
+            setNavMenuOpen(false);
+        }, 1800);
 
     }
 
@@ -3081,6 +3181,235 @@ ${NAV_MENU_HAMBURGER_SVG}
 
 
 
+
+    // ---------- new releases ----------
+
+    // Fetches /music/+releases/out-now/recommended, extracts each
+    // release (album/single), then fetches each release's album page
+    // in parallel and picks the most-listened track from its
+    // tracklist. Result is one representative track per release —
+    // effectively a sampler of what's new that Last.fm thinks the
+    // user will like.
+    //
+    // For singles the tracklist has one row, so we get the single
+    // itself. For LPs we get the album's most popular track (usually
+    // the first cut or the promo single).
+
+    const NEW_RELEASES_PAGE_PATH = "/music/+releases/out-now/recommended";
+
+
+    // Extract each release card from the /music/+releases page.
+    // Returns { artist, album, q } — album is used to fetch the album
+    // page, q is the fallback query if album-page fetch fails.
+
+    function collectNewReleasesFromDoc(doc, seen){
+
+
+        const results = [];
+
+
+        for(const item of doc.querySelectorAll(".resource-list--release-list-item-wrap")){
+
+
+            const nameLink =
+                item.querySelector(".resource-list--release-list-item-name a[href*='/music/']");
+
+            if(!nameLink) continue;
+
+
+            let pathname;
+
+            try {
+                pathname =
+                    new URL(
+                        nameLink.getAttribute("href"),
+                        location.origin
+                    ).pathname;
+            } catch (_) {
+                continue;
+            }
+
+
+            const parts = parseMusicPath(pathname);
+            if(!parts) continue;
+
+
+            // /music/{artist}/{album} — parts.artist + parts.second.
+            // Skip anything that doesn't have both segments.
+            if(!parts.second) continue;
+
+
+            const artist = parts.artist;
+            const album  = parts.second;
+
+            const key = `${artist}|${album}`;
+
+            if(seen.has(key)) continue;
+
+            seen.add(key);
+
+
+            results.push({
+                artist,
+                album,
+                url: `/music/${encodeSeg(artist)}/${encodeSeg(album)}`,
+            });
+
+        }
+
+
+        return results;
+
+    }
+
+
+    // Given an album page's Document, return the tracklist row with
+    // the highest listener count. Falls back to the first row if no
+    // listener counts are readable (album is fresh, page shape drift,
+    // whatever). Returns { artist, name, q } for the picked track.
+
+    function pickTopTrackFromAlbumDoc(doc){
+
+
+        let best      = null;
+        let bestCount = -1;
+        let first     = null;
+
+
+        for(const row of doc.querySelectorAll("tr.chartlist-row, .chartlist-row")){
+
+
+            const nameLink =
+                row.querySelector(".chartlist-name a[href*='/music/']");
+
+            if(!nameLink) continue;
+
+
+            let pathname;
+
+            try {
+                pathname =
+                    new URL(
+                        nameLink.getAttribute("href"),
+                        location.origin
+                    ).pathname;
+            } catch (_) {
+                continue;
+            }
+
+
+            const parts = parseMusicPath(pathname);
+            if(!parts) continue;
+
+
+            const info = musicPartsToInfo(parts);
+            if(info.entity !== "track") continue;
+
+
+            const entry = {
+                artist: info.artist,
+                name:   info.name,
+                q:      `${info.artist} ${info.name}`,
+            };
+
+
+            if(!first) first = entry;
+
+
+            // Listener count lives in .chartlist-count-bar-value's
+            // text — "25 listeners" style. Grab the leading integer.
+            const countEl =
+                row.querySelector(".chartlist-count-bar-value");
+
+            let count = 0;
+
+            if(countEl){
+                const m = (countEl.textContent || "").match(/[\d,]+/);
+                if(m) count = parseInt(m[0].replace(/,/g, ""), 10) || 0;
+            }
+
+
+            if(count > bestCount){
+                bestCount = count;
+                best = entry;
+            }
+
+        }
+
+
+        return best || first;
+
+    }
+
+
+    // Full orchestrator: fetch the releases page, extract releases,
+    // fan out to album pages in parallel, pick top track per album,
+    // filter unscrobbled, cap.
+
+    async function collectNewReleasesTopTracks(cap, scrobbleSet){
+
+
+        // If we're on the releases page use the live doc, otherwise
+        // fetch it once.
+        const startDoc =
+            document.querySelector(".resource-list--release-list-item-wrap")
+                ? document
+                : await fetchDoc(NEW_RELEASES_PAGE_PATH);
+
+        if(!startDoc) return [];
+
+
+        const seenReleases = new Set();
+
+        // Grab up to 2x cap releases so scrobbled-filtering doesn't
+        // starve us — some releases will drop out after we compare
+        // their top track against the user's library.
+        const releases =
+            collectNewReleasesFromDoc(startDoc, seenReleases)
+                .slice(0, cap * 2);
+
+
+        if(!releases.length) return [];
+
+
+        // Parallel fetch album pages.
+        const albumDocs =
+            await Promise.all(
+                releases.map(r => fetchDoc(r.url))
+            );
+
+
+        const seenTracks = new Set();
+        const collected  = [];
+
+
+        for(let i = 0; i < releases.length; i++){
+
+            if(collected.length >= cap) break;
+
+
+            const doc = albumDocs[i];
+            if(!doc) continue;
+
+
+            const top = pickTopTrackFromAlbumDoc(doc);
+            if(!top) continue;
+
+
+            if(seenTracks.has(top.q)) continue;
+            if(scrobbleSet.has(top.q.toLowerCase())) continue;
+
+            seenTracks.add(top.q);
+
+
+            collected.push({ q:top.q, entity:"track" });
+
+        }
+
+
+        return collected;
+
+    }
 
     // ---------- run + observe ----------
 

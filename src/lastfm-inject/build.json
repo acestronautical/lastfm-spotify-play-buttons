@@ -24,6 +24,7 @@
         "20-merged-recs.js",
         "21-similar-to-top.js",
         "22-neighbour-mix.js",
-        "23-run-observe.js"
+        "23-new-releases.js",
+        "24-run-observe.js"
     ]
 }
