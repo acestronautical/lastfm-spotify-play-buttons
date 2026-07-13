@@ -1,0 +1,11 @@
+{
+    "output": "tampermonkey/spotify-lastfm-puppeteer.user.js",
+    "header": "HEADER.txt",
+    "files": [
+        "01-log-config.js",
+        "02-utils.js",
+        "03-row-finder.js",
+        "04-actions.js",
+        "05-run.js"
+    ]
+}

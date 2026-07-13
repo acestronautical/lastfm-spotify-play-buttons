@@ -1,24 +1,14 @@
 <svg viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- Extension icon: rounded square split vertically into Last.fm red
-       (left) and Spotify green (right), with a white play triangle
-       straddling the divide. Communicates the extension's purpose
-       (bridge Last.fm → Spotify) using both brand colors, reads
-       clearly all the way down to 16x16. -->
+  <!-- Extension icon: three horizontal stripes stacked in the same
+       red / white / green identity used by the in-page hamburger
+       menu (.spotify-nav-menu-toggle). Sharing the exact same
+       silhouette between the toolbar icon and the in-page menu
+       gives users a discoverability cue — "the button in my toolbar
+       and this menu in the Last.fm nav are the same thing."
+       Transparent background so the icon adapts to whatever toolbar
+       theme the browser is using. -->
 
-  <defs>
-    <clipPath id="rounded">
-      <rect width="128" height="128" rx="24" ry="24"/>
-    </clipPath>
-  </defs>
-
-  <g clip-path="url(#rounded)">
-    <!-- Left half: Last.fm red -->
-    <rect width="64" height="128" fill="#D51007"/>
-
-    <!-- Right half: Spotify green -->
-    <rect x="64" width="64" height="128" fill="#1DB954"/>
-
-    <!-- White play triangle centered across the color divide -->
-    <path d="M48 40 L48 88 L94 64 Z" fill="#fff"/>
-  </g>
+  <path d="M8 20h112"  stroke="#D51007" stroke-width="22" stroke-linecap="round"/>
+  <path d="M8 64h112"  stroke="#fff"    stroke-width="22" stroke-linecap="round"/>
+  <path d="M8 108h112" stroke="#1DB954" stroke-width="22" stroke-linecap="round"/>
 </svg>

@@ -19,9 +19,19 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      - name: Read tag annotation for release body
+        id: tag_body
+        run: |
+          body=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          {
+            echo 'body<<__END_OF_BODY__'
+            echo "$body"
+            echo '__END_OF_BODY__'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build extension zip
         run: |
-          chmod +x scripts/sync-extension.sh scripts/build-extension-zip.sh
+          chmod +x scripts/build.sh scripts/sync-extension.sh scripts/build-extension-zip.sh
           scripts/build-extension-zip.sh "${{ steps.version.outputs.version }}"
 
       - name: Create GitHub Release
@@ -31,7 +41,8 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: ${{ steps.tag_body.outputs.body }}
           files: |
             dist/lastfm-spotify-play-buttons-extension-v${{ steps.version.outputs.version }}.zip
-            lastfm-inject-spotify-buttons.user.js
-            spotify-lastfm-puppeteer.user.js
+            tampermonkey/lastfm-inject-spotify-buttons.user.js
+            tampermonkey/spotify-lastfm-puppeteer.user.js

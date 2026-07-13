@@ -1,0 +1,29 @@
+{
+    "output": "tampermonkey/lastfm-inject-spotify-buttons.user.js",
+    "header": "HEADER.txt",
+    "files": [
+        "01-log.js",
+        "02-config.js",
+        "03-styles.js",
+        "04-icons.js",
+        "05-open-spotify.js",
+        "06-hover-menu.js",
+        "07-button-behavior.js",
+        "08-parse-music.js",
+        "09-track-buttons.js",
+        "10-station-buttons.js",
+        "11-music-cards.js",
+        "12-button-replace-main.js",
+        "13-queue-batch.js",
+        "14-nav-menu-html.js",
+        "15-nav-menu-state.js",
+        "16-nav-actions.js",
+        "17-user-page-pills.js",
+        "18-shared-helpers.js",
+        "19-scrobble-set.js",
+        "20-merged-recs.js",
+        "21-similar-to-top.js",
+        "22-neighbour-mix.js",
+        "23-run-observe.js"
+    ]
+}

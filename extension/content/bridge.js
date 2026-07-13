@@ -22,6 +22,7 @@ const DEFAULTS = {
     defaultAction:    "play",
     menuDelay:        280,
     entityBadges:     false,
+    queueLimit:       10,
 };
 
 

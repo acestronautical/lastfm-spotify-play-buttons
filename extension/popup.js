@@ -8,6 +8,7 @@ const DEFAULTS = {
     defaultAction:    "play",
     menuDelay:        280,
     entityBadges:     false,
+    queueLimit:       10,
 };
 
 const CONTROLS = [
@@ -16,6 +17,7 @@ const CONTROLS = [
     { key: "defaultAction",    type: "radio"    },
     { key: "menuDelay",        type: "range"    },
     { key: "entityBadges",     type: "checkbox" },
+    { key: "queueLimit",       type: "linearRange" },
 ];
 
 const REPO_URL =
@@ -61,6 +63,28 @@ function bindRadio(key, value){
                 chrome.storage.local.set({ [key]: input.value });
             }
         });
+    });
+}
+
+
+// A simple linear range control. Reads/writes the raw slider value.
+// The `suffix` is appended to the numeric label (e.g. " tracks").
+function bindLinearRange(key, value, suffix){
+    const el = document.getElementById(key);
+    const label = document.getElementById(`${key}-value`);
+    if(!el) return;
+
+    function render(v){
+        if(!label) return;
+        label.textContent = `${v}${suffix ? " " + suffix : ""}`;
+    }
+
+    el.value = value;
+    render(Number(el.value));
+
+    el.addEventListener("input", () => render(Number(el.value)));
+    el.addEventListener("change", () => {
+        chrome.storage.local.set({ [key]: Number(el.value) });
     });
 }
 
@@ -115,9 +139,10 @@ async function hydrate(){
     for (const { key, type } of CONTROLS){
         const value = settings[key];
         switch (type) {
-            case "checkbox": bindCheckbox(key, value); break;
-            case "radio":    bindRadio(key, value);    break;
-            case "range":    bindRange(key, value);    break;
+            case "checkbox":    bindCheckbox(key, value);              break;
+            case "radio":       bindRadio(key, value);                 break;
+            case "range":       bindRange(key, value);                 break;
+            case "linearRange": bindLinearRange(key, value, "tracks"); break;
         }
     }
 
