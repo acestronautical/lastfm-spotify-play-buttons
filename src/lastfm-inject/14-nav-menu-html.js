@@ -52,6 +52,15 @@
 <path d="M13 2.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4L11 4.1l1.4-.5z" fill="currentColor"/>
 </svg>`,
 
+        // Down-arrow into a tray — "import CSV file into a
+        // playlist". Reads as upload/import; arrow points down
+        // into the collecting bar at the bottom.
+        importPlaylist: `
+<svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" fill="currentColor">
+<path d="M7 1h2v6h2.5L8 10.5 4.5 7H7z"/>
+<path d="M2 12h12v2.4H2z"/>
+</svg>`,
+
     };
 
 
@@ -107,6 +116,11 @@ ${NAV_MENU_HAMBURGER_SVG}
 <span class="spotify-nav-menu-label">Queue new releases</span>
 </button>
 <div class="spotify-nav-menu-status" data-status-for="queue-new-releases" hidden></div>
+<button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="import-playlist">
+<span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.importPlaylist}</span>
+<span class="spotify-nav-menu-label">Import playlist from CSV</span>
+</button>
+<div class="spotify-nav-menu-status" data-status-for="import-playlist" hidden></div>
 <button type="button" role="menuitem" class="spotify-nav-menu-item" data-action="go-neighbour">
 <span class="spotify-nav-menu-icon">${NAV_MENU_ITEM_ICONS.queueNeighbour}</span>
 <span class="spotify-nav-menu-label">Go to a random neighbour</span>
@@ -149,9 +163,15 @@ ${NAV_MENU_HAMBURGER_SVG}
         });
 
 
-        // Dismiss on outside click / Escape.
+        // Dismiss on outside click / Escape. When an action has
+        // opted into busy mode (data-busy="true" on the wrap), the
+        // menu stays open on outside clicks so long-running work
+        // like CSV playlist import can stream progress into the
+        // status line without the user having to reopen the menu.
+        // Escape still closes as a manual escape hatch.
         document.addEventListener("click", e => {
             if(menu.getAttribute("data-open") !== "true") return;
+            if(wrap.getAttribute("data-busy") === "true") return;
             if(!wrap.contains(e.target)) setNavMenuOpen(false);
         });
 
@@ -174,6 +194,9 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         wrap.querySelector('[data-action="queue-new-releases"]')
             .addEventListener("click", onMenuQueueNewReleases);
+
+        wrap.querySelector('[data-action="import-playlist"]')
+            .addEventListener("click", onMenuImportPlaylist);
 
         wrap.querySelector('[data-action="go-neighbour"]')
             .addEventListener("click", onMenuGoToNeighbour);

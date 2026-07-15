@@ -25,6 +25,7 @@
         "21-similar-to-top.js",
         "22-neighbour-mix.js",
         "23-new-releases.js",
-        "24-run-observe.js"
+        "24-playlist-import.js",
+        "25-run-observe.js"
     ]
 }

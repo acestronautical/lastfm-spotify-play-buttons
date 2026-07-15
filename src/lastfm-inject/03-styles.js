@@ -52,8 +52,14 @@ button[data-spotify-replaced] {
      - .header-new-playlink      (album header pill — album pages
                                   carry BOTH classes, so exclude it
                                   here or the pill gets flipped into a
-                                  60x60 absolute-positioned overlay) */
-.desktop-playlink[data-spotify-replaced]:not(.recs-feed-playlink):not(.image-overlay-playlink-link):not(.header-new-playlink) {
+                                  60x60 absolute-positioned overlay)
+     - .chartlist-play-button    (library album rows have BOTH classes
+                                  on the compact play-column button;
+                                  without this exclusion the button
+                                  gets absolute-positioned as a 60x60
+                                  overlay and stomps on the title
+                                  text mid-row) */
+.desktop-playlink[data-spotify-replaced]:not(.recs-feed-playlink):not(.image-overlay-playlink-link):not(.header-new-playlink):not(.chartlist-play-button) {
     position:absolute !important;
     top:50% !important;
     left:50% !important;
@@ -534,6 +540,34 @@ section:has(> ol.catalogue-overview-similar-artists) .section-controls .inline-s
     width:12px !important;
     height:12px !important;
     display:block !important;
+}
+
+
+/* Playlist detail page cleanup — Last.fm's own multi-playlinks
+   strip (YouTube / Spotify / Apple icons in the right column of
+   each row) becomes redundant once our injected
+   .spotify-chartlist-play-button on the left already routes to
+   Spotify. Hide it on the playlist-overview page to eliminate the
+   2-3 duplicate green buttons per row. */
+body.namespace--user_playlists_playlist_overview .chartlist-multi-playlinks {
+    display:none !important;
+}
+
+
+/* Queue-playlist pill floats right in the playlist header row that
+   also contains ADD TRACK. Sits inline with the native red button. */
+.spotify-playlist-queue-pill {
+    margin-right:8px !important;
+    padding:6px 14px 6px 6px !important;
+    font-size:11px !important;
+}
+.spotify-playlist-queue-pill .spotify-user-queue-icon {
+    width:22px !important;
+    height:22px !important;
+}
+.spotify-playlist-queue-pill .spotify-user-queue-icon svg {
+    width:14px !important;
+    height:14px !important;
 }
 
 `;

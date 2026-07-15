@@ -400,4 +400,175 @@
     }
 
 
+    // ---------- action: Import playlist from CSV ----------
+    //
+    // Opens a hidden <input type="file"> file picker, reads the
+    // selected Exportify CSV, and drives importCsvAsPlaylist. Reports
+    // progress into the menu status line so the user sees each phase
+    // and per-track progress live.
+
+    function truncateStatus(s, n){
+        return s.length > n ? s.slice(0, n - 1) + "…" : s;
+    }
+
+
+    function onMenuImportPlaylist(e){
+
+        e.preventDefault();
+        e.stopPropagation();
+
+
+        const item = e.currentTarget;
+
+        if(item.getAttribute("aria-disabled") === "true") return;
+
+
+        // Pin the menu open BEFORE opening the picker. input.click()
+        // dispatches a real click that bubbles to <body> — our
+        // document-level outside-click handler would otherwise close
+        // the menu the instant we open the picker. The busy flag
+        // is released again on the picker's "cancel" event (no file
+        // chosen) or after the import finishes.
+        setNavMenuBusy(true);
+
+
+        // Hidden file input, one per click. Appended to <body> and
+        // removed after the change or cancel event.
+        const input = document.createElement("input");
+        input.type   = "file";
+        input.accept = ".csv,text/csv";
+        input.style.display = "none";
+
+
+        // Fires when the user dismisses the picker without picking a
+        // file (well supported: Chrome 113+, Firefox 91+, Safari
+        // 16.4+). Older browsers just leave the busy flag set until
+        // the next successful action — acceptable degradation.
+        input.addEventListener("cancel", () => {
+            input.remove();
+            setNavMenuBusy(false);
+        });
+
+
+        input.addEventListener("change", async () => {
+
+            const file = input.files && input.files[0];
+            input.remove();
+
+            // Picker has returned — release the busy pin so outside
+            // clicks can dismiss the menu again if the user wants.
+            // Import continues in the background regardless; menu
+            // just stops being sticky.
+            setNavMenuBusy(false);
+
+            if(!file) return;
+
+
+            setMenuItemBusy(item, true);
+            setMenuStatus("import-playlist", `Reading ${file.name}…`);
+
+
+            let csvText;
+            try {
+                csvText = await file.text();
+            } catch (err) {
+                setMenuStatus("import-playlist", `Read failed: ${err.message}`);
+                setTimeout(()=>{
+                    setMenuStatus("import-playlist", null);
+                    setMenuItemBusy(item, false);
+                }, 4000);
+                return;
+            }
+
+
+            const playlistName = filenameToPlaylistName(file.name);
+
+            log(`Importing "${playlistName}" from ${file.name}`);
+
+
+            let result;
+            try {
+                result = await importCsvAsPlaylist({
+                    csvText,
+                    playlistName,
+                    onProgress: (p) => {
+                        switch(p.phase){
+                            case "parsing":
+                                setMenuStatus("import-playlist", "Parsing CSV…");
+                                break;
+                            case "creating":
+                                setMenuStatus(
+                                    "import-playlist",
+                                    `Creating playlist (${p.total} tracks)…`
+                                );
+                                break;
+                            case "renaming":
+                                setMenuStatus(
+                                    "import-playlist",
+                                    `Naming “${truncateStatus(p.name, 32)}”…`
+                                );
+                                break;
+                            case "adding":
+                                setMenuStatus(
+                                    "import-playlist",
+                                    `Adding ${p.done + 1}/${p.total}: ` +
+                                    truncateStatus(p.current, 40)
+                                );
+                                break;
+                            case "done":
+                                setMenuStatus(
+                                    "import-playlist",
+                                    `Done: ${p.ok}/${p.total} added` +
+                                    (p.fail ? ` (${p.fail} failed)` : "")
+                                );
+                                log(
+                                    `Import done → ${p.url}  ` +
+                                    `(${p.ok}/${p.total} added, ${p.fail} failed)`
+                                );
+                                if(p.failures && p.failures.length){
+                                    log("Failed tracks (add manually):");
+                                    for(const f of p.failures)
+                                        log(`  ${f.artist} — ${f.track}  (${f.error})`);
+                                }
+                                break;
+                            case "warn":
+                                log(`Import warn: ${p.message}`);
+                                break;
+                            case "error":
+                                setMenuStatus(
+                                    "import-playlist",
+                                    `Error: ${truncateStatus(p.message, 48)}`
+                                );
+                                break;
+                        }
+                    },
+                });
+            } catch (err) {
+                log("Import failed:", err);
+                setMenuStatus(
+                    "import-playlist",
+                    `Failed: ${truncateStatus(err.message, 48)}`
+                );
+            }
+
+
+            // Leave the final status visible long enough to read. On
+            // success we hold it a bit longer so the user has time
+            // to note the URL logged to console.
+            const holdMs = (result && result.ok) ? 10000 : 6000;
+
+            setTimeout(()=>{
+                setMenuStatus("import-playlist", null);
+                setMenuItemBusy(item, false);
+            }, holdMs);
+
+        });
+
+
+        document.body.appendChild(input);
+        input.click();
+
+    }
+
+
 
