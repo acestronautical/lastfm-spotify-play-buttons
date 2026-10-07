@@ -43,17 +43,16 @@
         let remaining = batch.slice(1);
 
 
-        // Try the SPA fast-path. If the router isn't reachable, hand
-        // off to the full-reload hop chain (finish → navigateNext).
-        const nav = findSpotifyNavigator();
-
-        if(!nav){
-            log("SPA navigator not found - using full-reload hops");
+        // Try the SPA fast-path (direct in Tampermonkey, via the
+        // main-world agent in the extension). If unavailable, hand off
+        // to the full-reload hop chain (finish → navigateNext).
+        if(!(await waitSpaAvailable(2500))){
+            log("SPA not available - using full-reload hops");
             finish(firstOk);
             return;
         }
 
-        log("SPA navigator found - fast in-app hops");
+        log("SPA available - fast in-app hops");
 
 
         while(remaining.length){
@@ -62,7 +61,7 @@
 
             await delay(SPA_HOP_DELAY_MS);
 
-            const switched = await spaGotoSearch(nav, next);
+            const switched = await spaGotoSearch(next);
 
             if(!switched){
                 // SPA hop stalled — hand the rest to the reload chain.

@@ -89,16 +89,57 @@
     }
 
 
-    // Push a new /search/{q} route via the router and wait for the
-    // results to change. Returns false if the push throws or results
-    // don't update in time, so the caller can fall back to a reload.
-    async function spaGotoSearch(nav, item){
+    // In the packaged extension the puppeteer runs in the isolated world
+    // and can't read the React fiber, so a main-world agent
+    // (spotify-spa-agent.js) does the route push for us. It signals
+    // readiness and receives requests through shared-DOM attributes —
+    // the only channel that crosses the world boundary. Under
+    // Tampermonkey we're already in the main world and use the
+    // navigator directly (agent absent).
 
+    function spaAgentReady(){
+        return document.documentElement.getAttribute("data-lfs-spa") === "ready";
+    }
+
+    function spaRequestViaAgent(path){
+        document.documentElement.setAttribute("data-lfs-spa-goto", path);
+        document.dispatchEvent(new Event("lfs-spa-nav"));
+    }
+
+    // SPA is usable if we can reach the navigator directly (main world)
+    // or via the agent (isolated world).
+    function spaAvailable(){
+        return !!findSpotifyNavigator() || spaAgentReady();
+    }
+
+    // Give the main-world agent a moment to locate the router after a
+    // fresh load before deciding to fall back to full-reload hops.
+    async function waitSpaAvailable(ms){
+        const t0 = Date.now();
+        while(Date.now() - t0 < ms){
+            if(spaAvailable()) return true;
+            await delay(150);
+        }
+        return false;
+    }
+
+
+    // Push a new /search/{q} route (directly or via the agent) and wait
+    // for the results to change. Returns false if neither channel is
+    // available or results don't update in time, so the caller can fall
+    // back to a reload.
+    async function spaGotoSearch(item){
+
+        const path   = "/search/" + encodeURIComponent(item.q);
         const before = firstResultHref();
 
-        try {
-            nav.push("/search/" + encodeURIComponent(item.q));
-        } catch (_) {
+        const direct = findSpotifyNavigator();
+
+        if(direct){
+            try { direct.push(path); } catch (_) { return false; }
+        } else if(spaAgentReady()){
+            spaRequestViaAgent(path);
+        } else {
             return false;
         }
 

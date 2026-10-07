@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Last.fm → Spotify Play Buttons",
-    "version": "0.7.1",
+    "version": "0.7.2",
     "description": "Replace Last.fm play buttons with Spotify controls; auto-play the matched result on Spotify.",
     "browser_specific_settings": {
         "gecko": {
@@ -48,6 +48,15 @@
                 "content/spotify-puppeteer.js"
             ],
             "run_at": "document_idle",
+            "all_frames": false
+        },
+        {
+            "matches": ["*://open.spotify.com/search/*"],
+            "js": [
+                "content/spotify-spa-agent.js"
+            ],
+            "run_at": "document_idle",
+            "world": "MAIN",
             "all_frames": false
         }
     ]
