@@ -53,6 +53,10 @@
                 })
             );
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the neighbour fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
+
 
         // Round-robin merge for a balanced mix.
         const seen      = new Set();

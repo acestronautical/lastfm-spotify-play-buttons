@@ -28,6 +28,10 @@
                 ? document
                 : await fetchDoc(RECS_TRACKS_PAGE_PATH);
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the recs fetch above; resolve it now that we need to filter.
+        scrobbleSet = await scrobbleSet;
+
         if(startDoc){
             const items = filterUnscrobbled(
                 collectRecsTracksFromDoc(startDoc, seen),

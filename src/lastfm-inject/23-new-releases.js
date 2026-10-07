@@ -194,6 +194,10 @@
                 releases.map(r => fetchDoc(r.url))
             );
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the releases + album fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
+
 
         const seenTracks = new Set();
         const collected  = [];

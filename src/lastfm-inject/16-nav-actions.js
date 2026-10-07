@@ -21,8 +21,10 @@
 
         try {
 
+            // Pass the promise (not awaited) so the history fetch runs
+            // concurrently with the recs fetch inside the collector.
             const scrobbleSet =
-                me ? await getScrobbleSet(me) : new Set();
+                me ? getScrobbleSet(me) : new Set();
 
             setMenuStatus("queue-recs", "Loading recommendations…");
 
@@ -98,7 +100,9 @@
 
         try {
 
-            const scrobbleSet = await getScrobbleSet(me);
+            // Promise, not awaited — overlaps the history fetch with the
+            // seed + similar-track fetches inside the collector.
+            const scrobbleSet = getScrobbleSet(me);
 
             setMenuStatus(
                 "queue-similar",
@@ -183,7 +187,9 @@
 
         try {
 
-            const scrobbleSet = await getScrobbleSet(me);
+            // Promise, not awaited — overlaps the history fetch with the
+            // neighbours + neighbour-library fetches inside the collector.
+            const scrobbleSet = getScrobbleSet(me);
 
             setMenuStatus(
                 "queue-neighbour-mix",
@@ -268,8 +274,10 @@
 
         try {
 
+            // Promise, not awaited — overlaps the history fetch with the
+            // releases + album-page fetches inside the collector.
             const scrobbleSet =
-                me ? await getScrobbleSet(me) : new Set();
+                me ? getScrobbleSet(me) : new Set();
 
             setMenuStatus(
                 "queue-new-releases",

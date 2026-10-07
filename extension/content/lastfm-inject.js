@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.18
+// @version      3.19
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -2138,8 +2138,10 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         try {
 
+            // Pass the promise (not awaited) so the history fetch runs
+            // concurrently with the recs fetch inside the collector.
             const scrobbleSet =
-                me ? await getScrobbleSet(me) : new Set();
+                me ? getScrobbleSet(me) : new Set();
 
             setMenuStatus("queue-recs", "Loading recommendations…");
 
@@ -2215,7 +2217,9 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         try {
 
-            const scrobbleSet = await getScrobbleSet(me);
+            // Promise, not awaited — overlaps the history fetch with the
+            // seed + similar-track fetches inside the collector.
+            const scrobbleSet = getScrobbleSet(me);
 
             setMenuStatus(
                 "queue-similar",
@@ -2300,7 +2304,9 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         try {
 
-            const scrobbleSet = await getScrobbleSet(me);
+            // Promise, not awaited — overlaps the history fetch with the
+            // neighbours + neighbour-library fetches inside the collector.
+            const scrobbleSet = getScrobbleSet(me);
 
             setMenuStatus(
                 "queue-neighbour-mix",
@@ -2385,8 +2391,10 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         try {
 
+            // Promise, not awaited — overlaps the history fetch with the
+            // releases + album-page fetches inside the collector.
             const scrobbleSet =
-                me ? await getScrobbleSet(me) : new Set();
+                me ? getScrobbleSet(me) : new Set();
 
             setMenuStatus(
                 "queue-new-releases",
@@ -3357,6 +3365,10 @@ ${NAV_MENU_HAMBURGER_SVG}
                 ? document
                 : await fetchDoc(RECS_TRACKS_PAGE_PATH);
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the recs fetch above; resolve it now that we need to filter.
+        scrobbleSet = await scrobbleSet;
+
         if(startDoc){
             const items = filterUnscrobbled(
                 collectRecsTracksFromDoc(startDoc, seen),
@@ -3492,6 +3504,10 @@ ${NAV_MENU_HAMBURGER_SVG}
                 )
             );
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the seed + similar fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
+
 
         const collected = [];
 
@@ -3572,6 +3588,10 @@ ${NAV_MENU_HAMBURGER_SVG}
 
                 })
             );
+
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the neighbour fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
 
 
         // Round-robin merge for a balanced mix.
@@ -3810,6 +3830,10 @@ ${NAV_MENU_HAMBURGER_SVG}
             await Promise.all(
                 releases.map(r => fetchDoc(r.url))
             );
+
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the releases + album fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
 
 
         const seenTracks = new Set();

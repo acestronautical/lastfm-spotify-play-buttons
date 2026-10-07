@@ -98,6 +98,10 @@
                 )
             );
 
+        // scrobbleSet may be a promise so the history fetch overlaps
+        // the seed + similar fetches above; resolve it before filtering.
+        scrobbleSet = await scrobbleSet;
+
 
         const collected = [];
 
