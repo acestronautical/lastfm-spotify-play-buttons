@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.19
+// @version      3.20
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -1815,7 +1815,11 @@ ${spotifyIcon(currentAction, entity)}
             seen.add(q);
 
 
-            results.push({ q, entity:"track" });
+            // Seeds = the user artists that led to this rec ("Similar
+            // to …"), used by the discovery ranker.
+            const seeds = parseSimilarSeeds(ctx ? ctx.textContent : "");
+
+            results.push({ q, entity:"track", artist:info.artist, seeds });
 
         }
 
@@ -2015,7 +2019,7 @@ ${NAV_MENU_HAMBURGER_SVG}
             const open = menu.getAttribute("data-open") === "true";
             // Warm the scrobble history while the menu is open so the
             // first action doesn't pay the full fetch cost.
-            if(!open) warmScrobbleSet();
+            if(!open){ warmScrobbleSet(); warmTopArtists(); }
             setNavMenuOpen(!open);
         });
 
@@ -2145,7 +2149,10 @@ ${NAV_MENU_HAMBURGER_SVG}
 
             setMenuStatus("queue-recs", "Loading recommendations…");
 
-            tracks = await collectMergedRecs(queueBatchCap(), scrobbleSet);
+            tracks = await collectMergedRecs(
+                queueBatchCap(), scrobbleSet,
+                me ? getTopArtists(me) : new Set()
+            );
 
         } catch (err) {
 
@@ -2227,7 +2234,7 @@ ${NAV_MENU_HAMBURGER_SVG}
             );
 
             tracks = await collectSimilarToTopTracks(
-                queueBatchCap(), scrobbleSet, me
+                queueBatchCap(), scrobbleSet, me, getTopArtists(me)
             );
 
         } catch (err) {
@@ -2402,7 +2409,8 @@ ${NAV_MENU_HAMBURGER_SVG}
             );
 
             tracks = await collectNewReleasesTopTracks(
-                queueBatchCap(), scrobbleSet
+                queueBatchCap(), scrobbleSet,
+                me ? getTopArtists(me) : new Set()
             );
 
         } catch (err) {
@@ -3003,6 +3011,84 @@ ${NAV_MENU_HAMBURGER_SVG}
     }
 
 
+    // ---------- discovery ranking ----------
+
+    // Max tracks from any one artist in a batch, so the queue spans a
+    // range of artists rather than being dominated by a single one.
+    const MAX_PER_ARTIST = 2;
+
+    // Parse a recs-feed "Similar to X, Y and Z" context into lowercased
+    // seed artist names — the user artists that led to this rec.
+    function parseSimilarSeeds(contextText){
+        if(!contextText) return [];
+        const m = contextText.match(/similar to\s+(.+)/i);
+        if(!m) return [];
+        return m[1]
+            .split(/,|\band\b/)
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+    }
+
+    // Discovery score: higher = better taste match and (for unscrobbled
+    // tracks) more likely genuinely new to the user.
+    //   +2  track's own artist is one the user already loves
+    //   +1  per seed artist ("Similar to …") the user already loves
+    //   +n  corroboration when the track surfaced from several sources
+    function scoreCandidate(t, topArtists){
+        let s = 1; // base so every candidate keeps a chance
+        const artist = (t.artist || "").toLowerCase();
+        if(artist && topArtists && topArtists.has(artist)) s += 2;
+        if(t.seeds && topArtists)
+            for(const seed of t.seeds)
+                if(topArtists.has(seed)) s += 1;
+        if(t.corroboration) s += (t.corroboration - 1);
+        return s;
+    }
+
+    // Weighted-random selection without replacement, capped per artist.
+    // Weighting biases toward taste (score) while the randomness keeps
+    // results varied across runs and the cap keeps the batch broad.
+    function rankAndSelect(candidates, cap, topArtists, maxPerArtist){
+
+        const limit = maxPerArtist || MAX_PER_ARTIST;
+
+        const pool = candidates.map(c => ({
+            c,
+            w: scoreCandidate(c, topArtists)
+        }));
+
+        const picked    = [];
+        const perArtist = new Map();
+
+        while(picked.length < cap && pool.length){
+
+            const total = pool.reduce((a, p) => a + p.w, 0);
+
+            let r = Math.random() * total;
+            let idx = 0;
+            for(; idx < pool.length - 1; idx++){
+                r -= pool[idx].w;
+                if(r <= 0) break;
+            }
+
+            const [chosen] = pool.splice(idx, 1);
+
+            const artist = (chosen.c.artist || "").toLowerCase();
+            if(artist && limit){
+                const n = perArtist.get(artist) || 0;
+                if(n >= limit) continue; // over the per-artist cap — drop
+                perArtist.set(artist, n + 1);
+            }
+
+            picked.push(chosen.c);
+
+        }
+
+        return picked;
+
+    }
+
+
     async function fetchDoc(pathOrHref){
 
         try {
@@ -3334,6 +3420,77 @@ ${NAV_MENU_HAMBURGER_SVG}
     }
 
 
+    // ---------- top-artists affinity set ----------
+
+    // Lower-cased set of the user's most-played artists, used to score
+    // recommendations: a track by (or seeded from) an artist the user
+    // already loves is both more taste-aligned and, if unscrobbled,
+    // more likely a genuinely new song to them.
+
+    const TOP_ARTISTS_TTL_MS = 600000;
+    const TOP_ARTISTS_PAGES  = 2;
+
+    let topArtistsCache    = null;
+    let topArtistsInflight = null;
+
+
+    async function getTopArtists(username){
+
+
+        if(topArtistsCache &&
+           topArtistsCache.username === username &&
+           Date.now() - topArtistsCache.at < TOP_ARTISTS_TTL_MS){
+            return topArtistsCache.set;
+        }
+
+        if(topArtistsInflight &&
+           topArtistsInflight.username === username){
+            return topArtistsInflight.promise;
+        }
+
+
+        const promise = (async () => {
+
+            const set  = new Set();
+            const base = `/user/${encodeURIComponent(username)}/library/artists`;
+
+            const urls = [];
+            for(let page = 1; page <= TOP_ARTISTS_PAGES; page++)
+                urls.push(page === 1 ? base : `${base}?page=${page}`);
+
+            const docs = await Promise.all(urls.map(u => fetchDoc(u)));
+
+            for(const doc of docs){
+                if(!doc) continue;
+                for(const a of doc.querySelectorAll('.chartlist-name a[href^="/music/"]')){
+                    const name = (a.textContent || "").trim().toLowerCase();
+                    if(name) set.add(name);
+                }
+            }
+
+            topArtistsCache = { username, set, at:Date.now() };
+            return set;
+
+        })();
+
+
+        topArtistsInflight = { username, promise };
+
+        try {
+            return await promise;
+        } finally {
+            topArtistsInflight = null;
+        }
+
+    }
+
+
+    function warmTopArtists(){
+        const me = getCurrentUsername();
+        if(me) getTopArtists(me).catch(()=>{});
+    }
+
+
 
     // ---------- merged recs (both surfaces) ----------
 
@@ -3347,7 +3504,7 @@ ${NAV_MENU_HAMBURGER_SVG}
     const REC_POOL_FACTOR = 3;
 
 
-    async function collectMergedRecs(cap, scrobbleSet){
+    async function collectMergedRecs(cap, scrobbleSet, topArtists){
 
 
         // Collect a pool several times larger than the batch, then
@@ -3398,7 +3555,9 @@ ${NAV_MENU_HAMBURGER_SVG}
         }
 
 
-        return shuffle(collected).slice(0, cap);
+        // Rank the pool by taste affinity (own/seed artists the user
+        // loves) with a per-artist cap, keeping randomness for variety.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }
 
@@ -3472,7 +3631,7 @@ ${NAV_MENU_HAMBURGER_SVG}
     }
 
 
-    async function collectSimilarToTopTracks(cap, scrobbleSet, username){
+    async function collectSimilarToTopTracks(cap, scrobbleSet, username, topArtists){
 
 
         const seedDoc =
@@ -3526,9 +3685,9 @@ ${NAV_MENU_HAMBURGER_SVG}
         }
 
 
-        // Shuffle the full pool of similar tracks before slicing so the
-        // mix varies run to run rather than favouring the first seeds.
-        return shuffle(collected).slice(0, cap);
+        // Rank by taste affinity + per-artist cap instead of a plain
+        // shuffle, so stronger matches surface while staying varied.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }
 
@@ -3594,38 +3753,24 @@ ${NAV_MENU_HAMBURGER_SVG}
         scrobbleSet = await scrobbleSet;
 
 
-        // Round-robin merge for a balanced mix.
-        const seen      = new Set();
-        const collected = [];
+        // Pool all unscrobbled neighbour tracks, then rank with a
+        // per-artist cap only — no top-artist weighting, since this
+        // action is about discovering what similar listeners play
+        // rather than echoing the user's own favourites.
+        const seen = new Set();
+        const pool = [];
 
-
-        while(collected.length < cap){
-
-            let advanced = false;
-
-            for(const list of perNeighbour){
-
-                if(collected.length >= cap) break;
-
-                while(list.length){
-
-                    const t = list.shift();
-
-                    if(seen.has(t.q)) continue;
-                    if(scrobbleSet.has(t.q.toLowerCase())) continue;
-
-                    seen.add(t.q);
-                    collected.push({ q:t.q, entity:t.entity });
-                    advanced = true;
-                    break;
-
-                }
-
+        for(const list of perNeighbour){
+            for(const t of list){
+                if(seen.has(t.q)) continue;
+                if(scrobbleSet.has(t.q.toLowerCase())) continue;
+                seen.add(t.q);
+                pool.push({ q:t.q, entity:t.entity, artist:t.artist });
             }
-
-            if(!advanced) break;
-
         }
+
+
+        const collected = rankAndSelect(pool, cap, null);
 
 
         return { tracks:collected, neighbours:picked };
@@ -3799,7 +3944,7 @@ ${NAV_MENU_HAMBURGER_SVG}
     // fan out to album pages in parallel, pick top track per album,
     // filter unscrobbled, cap.
 
-    async function collectNewReleasesTopTracks(cap, scrobbleSet){
+    async function collectNewReleasesTopTracks(cap, scrobbleSet, topArtists){
 
 
         // If we're on the releases page use the live doc, otherwise
@@ -3842,9 +3987,6 @@ ${NAV_MENU_HAMBURGER_SVG}
 
         for(let i = 0; i < releases.length; i++){
 
-            if(collected.length >= cap) break;
-
-
             const doc = albumDocs[i];
             if(!doc) continue;
 
@@ -3859,12 +4001,13 @@ ${NAV_MENU_HAMBURGER_SVG}
             seenTracks.add(top.q);
 
 
-            collected.push({ q:top.q, entity:"track" });
+            collected.push({ q:top.q, entity:"track", artist:top.artist });
 
         }
 
 
-        return collected;
+        // Rank the release pool by taste affinity with a per-artist cap.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }
 

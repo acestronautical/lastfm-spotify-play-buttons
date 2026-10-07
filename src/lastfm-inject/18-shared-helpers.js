@@ -26,6 +26,84 @@
     }
 
 
+    // ---------- discovery ranking ----------
+
+    // Max tracks from any one artist in a batch, so the queue spans a
+    // range of artists rather than being dominated by a single one.
+    const MAX_PER_ARTIST = 2;
+
+    // Parse a recs-feed "Similar to X, Y and Z" context into lowercased
+    // seed artist names — the user artists that led to this rec.
+    function parseSimilarSeeds(contextText){
+        if(!contextText) return [];
+        const m = contextText.match(/similar to\s+(.+)/i);
+        if(!m) return [];
+        return m[1]
+            .split(/,|\band\b/)
+            .map(s => s.trim().toLowerCase())
+            .filter(Boolean);
+    }
+
+    // Discovery score: higher = better taste match and (for unscrobbled
+    // tracks) more likely genuinely new to the user.
+    //   +2  track's own artist is one the user already loves
+    //   +1  per seed artist ("Similar to …") the user already loves
+    //   +n  corroboration when the track surfaced from several sources
+    function scoreCandidate(t, topArtists){
+        let s = 1; // base so every candidate keeps a chance
+        const artist = (t.artist || "").toLowerCase();
+        if(artist && topArtists && topArtists.has(artist)) s += 2;
+        if(t.seeds && topArtists)
+            for(const seed of t.seeds)
+                if(topArtists.has(seed)) s += 1;
+        if(t.corroboration) s += (t.corroboration - 1);
+        return s;
+    }
+
+    // Weighted-random selection without replacement, capped per artist.
+    // Weighting biases toward taste (score) while the randomness keeps
+    // results varied across runs and the cap keeps the batch broad.
+    function rankAndSelect(candidates, cap, topArtists, maxPerArtist){
+
+        const limit = maxPerArtist || MAX_PER_ARTIST;
+
+        const pool = candidates.map(c => ({
+            c,
+            w: scoreCandidate(c, topArtists)
+        }));
+
+        const picked    = [];
+        const perArtist = new Map();
+
+        while(picked.length < cap && pool.length){
+
+            const total = pool.reduce((a, p) => a + p.w, 0);
+
+            let r = Math.random() * total;
+            let idx = 0;
+            for(; idx < pool.length - 1; idx++){
+                r -= pool[idx].w;
+                if(r <= 0) break;
+            }
+
+            const [chosen] = pool.splice(idx, 1);
+
+            const artist = (chosen.c.artist || "").toLowerCase();
+            if(artist && limit){
+                const n = perArtist.get(artist) || 0;
+                if(n >= limit) continue; // over the per-artist cap — drop
+                perArtist.set(artist, n + 1);
+            }
+
+            picked.push(chosen.c);
+
+        }
+
+        return picked;
+
+    }
+
+
     async function fetchDoc(pathOrHref){
 
         try {

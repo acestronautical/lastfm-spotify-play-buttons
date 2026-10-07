@@ -28,7 +28,10 @@
 
             setMenuStatus("queue-recs", "Loading recommendations…");
 
-            tracks = await collectMergedRecs(queueBatchCap(), scrobbleSet);
+            tracks = await collectMergedRecs(
+                queueBatchCap(), scrobbleSet,
+                me ? getTopArtists(me) : new Set()
+            );
 
         } catch (err) {
 
@@ -110,7 +113,7 @@
             );
 
             tracks = await collectSimilarToTopTracks(
-                queueBatchCap(), scrobbleSet, me
+                queueBatchCap(), scrobbleSet, me, getTopArtists(me)
             );
 
         } catch (err) {
@@ -285,7 +288,8 @@
             );
 
             tracks = await collectNewReleasesTopTracks(
-                queueBatchCap(), scrobbleSet
+                queueBatchCap(), scrobbleSet,
+                me ? getTopArtists(me) : new Set()
             );
 
         } catch (err) {

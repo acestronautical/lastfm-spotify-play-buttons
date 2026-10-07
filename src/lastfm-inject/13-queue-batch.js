@@ -62,7 +62,11 @@
             seen.add(q);
 
 
-            results.push({ q, entity:"track" });
+            // Seeds = the user artists that led to this rec ("Similar
+            // to …"), used by the discovery ranker.
+            const seeds = parseSimilarSeeds(ctx ? ctx.textContent : "");
+
+            results.push({ q, entity:"track", artist:info.artist, seeds });
 
         }
 

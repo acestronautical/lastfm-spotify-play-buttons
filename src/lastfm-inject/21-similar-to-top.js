@@ -66,7 +66,7 @@
     }
 
 
-    async function collectSimilarToTopTracks(cap, scrobbleSet, username){
+    async function collectSimilarToTopTracks(cap, scrobbleSet, username, topArtists){
 
 
         const seedDoc =
@@ -120,9 +120,9 @@
         }
 
 
-        // Shuffle the full pool of similar tracks before slicing so the
-        // mix varies run to run rather than favouring the first seeds.
-        return shuffle(collected).slice(0, cap);
+        // Rank by taste affinity + per-artist cap instead of a plain
+        // shuffle, so stronger matches surface while staying varied.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }
 

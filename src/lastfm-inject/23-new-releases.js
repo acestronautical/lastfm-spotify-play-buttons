@@ -162,7 +162,7 @@
     // fan out to album pages in parallel, pick top track per album,
     // filter unscrobbled, cap.
 
-    async function collectNewReleasesTopTracks(cap, scrobbleSet){
+    async function collectNewReleasesTopTracks(cap, scrobbleSet, topArtists){
 
 
         // If we're on the releases page use the live doc, otherwise
@@ -205,9 +205,6 @@
 
         for(let i = 0; i < releases.length; i++){
 
-            if(collected.length >= cap) break;
-
-
             const doc = albumDocs[i];
             if(!doc) continue;
 
@@ -222,11 +219,12 @@
             seenTracks.add(top.q);
 
 
-            collected.push({ q:top.q, entity:"track" });
+            collected.push({ q:top.q, entity:"track", artist:top.artist });
 
         }
 
 
-        return collected;
+        // Rank the release pool by taste affinity with a per-artist cap.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }

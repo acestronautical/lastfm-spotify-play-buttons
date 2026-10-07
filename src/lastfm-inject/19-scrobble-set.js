@@ -102,3 +102,74 @@
     }
 
 
+    // ---------- top-artists affinity set ----------
+
+    // Lower-cased set of the user's most-played artists, used to score
+    // recommendations: a track by (or seeded from) an artist the user
+    // already loves is both more taste-aligned and, if unscrobbled,
+    // more likely a genuinely new song to them.
+
+    const TOP_ARTISTS_TTL_MS = 600000;
+    const TOP_ARTISTS_PAGES  = 2;
+
+    let topArtistsCache    = null;
+    let topArtistsInflight = null;
+
+
+    async function getTopArtists(username){
+
+
+        if(topArtistsCache &&
+           topArtistsCache.username === username &&
+           Date.now() - topArtistsCache.at < TOP_ARTISTS_TTL_MS){
+            return topArtistsCache.set;
+        }
+
+        if(topArtistsInflight &&
+           topArtistsInflight.username === username){
+            return topArtistsInflight.promise;
+        }
+
+
+        const promise = (async () => {
+
+            const set  = new Set();
+            const base = `/user/${encodeURIComponent(username)}/library/artists`;
+
+            const urls = [];
+            for(let page = 1; page <= TOP_ARTISTS_PAGES; page++)
+                urls.push(page === 1 ? base : `${base}?page=${page}`);
+
+            const docs = await Promise.all(urls.map(u => fetchDoc(u)));
+
+            for(const doc of docs){
+                if(!doc) continue;
+                for(const a of doc.querySelectorAll('.chartlist-name a[href^="/music/"]')){
+                    const name = (a.textContent || "").trim().toLowerCase();
+                    if(name) set.add(name);
+                }
+            }
+
+            topArtistsCache = { username, set, at:Date.now() };
+            return set;
+
+        })();
+
+
+        topArtistsInflight = { username, promise };
+
+        try {
+            return await promise;
+        } finally {
+            topArtistsInflight = null;
+        }
+
+    }
+
+
+    function warmTopArtists(){
+        const me = getCurrentUsername();
+        if(me) getTopArtists(me).catch(()=>{});
+    }
+
+

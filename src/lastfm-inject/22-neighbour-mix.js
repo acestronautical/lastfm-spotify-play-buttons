@@ -58,38 +58,24 @@
         scrobbleSet = await scrobbleSet;
 
 
-        // Round-robin merge for a balanced mix.
-        const seen      = new Set();
-        const collected = [];
+        // Pool all unscrobbled neighbour tracks, then rank with a
+        // per-artist cap only — no top-artist weighting, since this
+        // action is about discovering what similar listeners play
+        // rather than echoing the user's own favourites.
+        const seen = new Set();
+        const pool = [];
 
-
-        while(collected.length < cap){
-
-            let advanced = false;
-
-            for(const list of perNeighbour){
-
-                if(collected.length >= cap) break;
-
-                while(list.length){
-
-                    const t = list.shift();
-
-                    if(seen.has(t.q)) continue;
-                    if(scrobbleSet.has(t.q.toLowerCase())) continue;
-
-                    seen.add(t.q);
-                    collected.push({ q:t.q, entity:t.entity });
-                    advanced = true;
-                    break;
-
-                }
-
+        for(const list of perNeighbour){
+            for(const t of list){
+                if(seen.has(t.q)) continue;
+                if(scrobbleSet.has(t.q.toLowerCase())) continue;
+                seen.add(t.q);
+                pool.push({ q:t.q, entity:t.entity, artist:t.artist });
             }
-
-            if(!advanced) break;
-
         }
+
+
+        const collected = rankAndSelect(pool, cap, null);
 
 
         return { tracks:collected, neighbours:picked };

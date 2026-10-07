@@ -10,7 +10,7 @@
     const REC_POOL_FACTOR = 3;
 
 
-    async function collectMergedRecs(cap, scrobbleSet){
+    async function collectMergedRecs(cap, scrobbleSet, topArtists){
 
 
         // Collect a pool several times larger than the batch, then
@@ -61,7 +61,9 @@
         }
 
 
-        return shuffle(collected).slice(0, cap);
+        // Rank the pool by taste affinity (own/seed artists the user
+        // loves) with a per-artist cap, keeping randomness for variety.
+        return rankAndSelect(collected, cap, await topArtists);
 
     }
 
