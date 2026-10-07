@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Last.fm Inject Spotify Buttons
 // @namespace    https://github.com/
-// @version      3.20
+// @version      3.21
 // @description  Replace Last.fm track, album and artist play buttons with Spotify-style buttons and actions
 // @match        https://www.last.fm/*
 // @grant        GM_openInTab
@@ -35,6 +35,8 @@
         menuDelay:        280,
         entityBadges:     false,
         queueLimit:       10,
+        discovery:        50,
+        maxPerArtist:     2,
     };
 
     function getConfig(){
@@ -3017,6 +3019,21 @@ ${NAV_MENU_HAMBURGER_SVG}
     // range of artists rather than being dominated by a single one.
     const MAX_PER_ARTIST = 2;
 
+    // Map the user's "Recommendation style" (0 familiar … 100 adventurous)
+    // to scoring weights: familiar → strongly favour loved artists,
+    // adventurous → treat everything equally (pure discovery).
+    function discoveryWeights(){
+        const raw = Number(getConfig().discovery);
+        const d = isFinite(raw) ? Math.max(0, Math.min(100, raw)) : 50;
+        const ownW = Math.max(0, Math.min(4, Math.round((100 - d) / 25)));
+        return { ownW, seedW: Math.round(ownW / 2) };
+    }
+
+    function configMaxPerArtist(){
+        const n = Number(getConfig().maxPerArtist);
+        return (isFinite(n) && n >= 1) ? Math.floor(n) : MAX_PER_ARTIST;
+    }
+
     // Parse a recs-feed "Similar to X, Y and Z" context into lowercased
     // seed artist names — the user artists that led to this rec.
     function parseSimilarSeeds(contextText){
@@ -3030,17 +3047,16 @@ ${NAV_MENU_HAMBURGER_SVG}
     }
 
     // Discovery score: higher = better taste match and (for unscrobbled
-    // tracks) more likely genuinely new to the user.
-    //   +2  track's own artist is one the user already loves
-    //   +1  per seed artist ("Similar to …") the user already loves
-    //   +n  corroboration when the track surfaced from several sources
+    // tracks) more likely genuinely new to the user. Weights come from
+    // the user's "Recommendation style" setting.
     function scoreCandidate(t, topArtists){
+        const { ownW, seedW } = discoveryWeights();
         let s = 1; // base so every candidate keeps a chance
         const artist = (t.artist || "").toLowerCase();
-        if(artist && topArtists && topArtists.has(artist)) s += 2;
+        if(artist && topArtists && topArtists.has(artist)) s += ownW;
         if(t.seeds && topArtists)
             for(const seed of t.seeds)
-                if(topArtists.has(seed)) s += 1;
+                if(topArtists.has(seed)) s += seedW;
         if(t.corroboration) s += (t.corroboration - 1);
         return s;
     }
@@ -3050,7 +3066,7 @@ ${NAV_MENU_HAMBURGER_SVG}
     // results varied across runs and the cap keeps the batch broad.
     function rankAndSelect(candidates, cap, topArtists, maxPerArtist){
 
-        const limit = maxPerArtist || MAX_PER_ARTIST;
+        const limit = maxPerArtist || configMaxPerArtist();
 
         const pool = candidates.map(c => ({
             c,

@@ -9,6 +9,8 @@ const DEFAULTS = {
     menuDelay:        280,
     entityBadges:     false,
     queueLimit:       10,
+    discovery:        50,
+    maxPerArtist:     2,
 };
 
 const CONTROLS = [
@@ -18,6 +20,8 @@ const CONTROLS = [
     { key: "menuDelay",        type: "range"    },
     { key: "entityBadges",     type: "checkbox" },
     { key: "queueLimit",       type: "linearRange" },
+    { key: "discovery",        type: "discovery" },
+    { key: "maxPerArtist",     type: "perArtistRange" },
 ];
 
 const REPO_URL =
@@ -132,6 +136,34 @@ function bindRange(key, value){
 }
 
 
+// Discovery "style" slider: 0 = Familiar (favour loved artists) …
+// 100 = Very adventurous (treat everything equally). Stores the raw
+// 0-100; the injector converts it to scoring weights.
+function bindDiscovery(key, value){
+    const el = document.getElementById(key);
+    const label = document.getElementById(`${key}-value`);
+    if(!el) return;
+
+    function descriptor(v){
+        if(v <= 20) return "Familiar";
+        if(v <= 40) return "Mostly familiar";
+        if(v <  60) return "Balanced";
+        if(v <  80) return "Adventurous";
+        return "Very adventurous";
+    }
+
+    function render(v){ if(label) label.textContent = descriptor(v); }
+
+    el.value = value;
+    render(Number(el.value));
+
+    el.addEventListener("input", () => render(Number(el.value)));
+    el.addEventListener("change", () => {
+        chrome.storage.local.set({ [key]: Number(el.value) });
+    });
+}
+
+
 async function hydrate(){
 
     const settings = await chrome.storage.local.get(DEFAULTS);
@@ -139,10 +171,12 @@ async function hydrate(){
     for (const { key, type } of CONTROLS){
         const value = settings[key];
         switch (type) {
-            case "checkbox":    bindCheckbox(key, value);              break;
-            case "radio":       bindRadio(key, value);                 break;
-            case "range":       bindRange(key, value);                 break;
-            case "linearRange": bindLinearRange(key, value, "tracks"); break;
+            case "checkbox":       bindCheckbox(key, value);                 break;
+            case "radio":          bindRadio(key, value);                    break;
+            case "range":          bindRange(key, value);                    break;
+            case "linearRange":    bindLinearRange(key, value, "tracks");     break;
+            case "perArtistRange": bindLinearRange(key, value, "/ artist");   break;
+            case "discovery":      bindDiscovery(key, value);                break;
         }
     }
 

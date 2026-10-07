@@ -10,6 +10,8 @@
         menuDelay:        280,
         entityBadges:     false,
         queueLimit:       10,
+        discovery:        50,
+        maxPerArtist:     2,
     };
 
     function getConfig(){
