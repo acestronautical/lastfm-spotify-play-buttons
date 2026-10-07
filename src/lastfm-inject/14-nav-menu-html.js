@@ -159,6 +159,9 @@ ${NAV_MENU_HAMBURGER_SVG}
             e.preventDefault();
             e.stopPropagation();
             const open = menu.getAttribute("data-open") === "true";
+            // Warm the scrobble history while the menu is open so the
+            // first action doesn't pay the full fetch cost.
+            if(!open) warmScrobbleSet();
             setNavMenuOpen(!open);
         });
 

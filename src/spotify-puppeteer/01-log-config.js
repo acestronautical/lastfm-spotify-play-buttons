@@ -41,7 +41,9 @@
         params.get("action") || "play";
 
 
-    const entity =
+    // Reassigned per batch item in SPA-navigation mode (the batch
+    // carries an entity per item); starts from the load-time param.
+    let entity =
         params.get("entity") || "track";
 
 
@@ -51,3 +53,10 @@
     const TIMEOUT_MS   = 30000;
     const CLOSE_MS     = 1000;
     const MENU_WAIT_MS = 2500;
+
+    // SPA fast-path tuning: how long to wait for in-app search results
+    // to reflect a navigator.push before falling back to a full reload,
+    // and a courtesy pause between SPA hops so the previous action's
+    // request has fired.
+    const SPA_NAV_TIMEOUT_MS = 4000;
+    const SPA_HOP_DELAY_MS   = 300;

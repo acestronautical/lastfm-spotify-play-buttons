@@ -1,18 +1,13 @@
     // ---------- neighbour mix ----------
 
-    // Pick a few top neighbours, pull each one's top + recent tracks
-    // in parallel, shuffle each list, and round-robin merge into a
-    // "mix" that's less dominated by any single neighbour's library.
+    // Pick a few neighbours at random from the top of the similarity
+    // list, pull each one's top + recent tracks in parallel, shuffle
+    // each list, and round-robin merge into a "mix" that's less
+    // dominated by any single neighbour's library — and varies run to
+    // run instead of always the same top neighbours.
 
     const NEIGHBOUR_MIX_COUNT = 3;
-
-    function shuffleInPlace(arr){
-        for(let i = arr.length - 1; i > 0; i--){
-            const j = Math.floor(Math.random() * (i + 1));
-            [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        return arr;
-    }
+    const NEIGHBOUR_MIX_POOL  = 12;
 
 
     async function collectNeighbourMix(cap, scrobbleSet, username){
@@ -30,7 +25,10 @@
         if(!neighbours.length) return { tracks:[], neighbours:[] };
 
 
-        const picked = neighbours.slice(0, NEIGHBOUR_MIX_COUNT);
+        // Sample from the most-similar slice so picks stay relevant but
+        // differ each run.
+        const picked =
+            sampleN(neighbours.slice(0, NEIGHBOUR_MIX_POOL), NEIGHBOUR_MIX_COUNT);
 
 
         // For each picked neighbour, fetch top + recent in parallel.

@@ -5,8 +5,18 @@
     // Both go through the shared scrobble-set filter so overlap and
     // long-tail scrobbles are stripped.
 
+    // Overfetch factor: gather this many × the batch size as a candidate
+    // pool before shuffling down to the batch, for discovery variety.
+    const REC_POOL_FACTOR = 3;
+
+
     async function collectMergedRecs(cap, scrobbleSet){
 
+
+        // Collect a pool several times larger than the batch, then
+        // shuffle and slice — so repeat runs surface different tracks
+        // instead of always the same top-N in Last.fm's page order.
+        const poolTarget = cap * REC_POOL_FACTOR;
 
         const seen      = new Set();
         const collected = [];
@@ -26,14 +36,12 @@
             collected.push(...items);
         }
 
-        if(collected.length >= cap)
-            return collected.slice(0, cap);
 
-
-        // Source B: /music/+recommended/tracks, walk pagination.
+        // Source B: /music/+recommended/tracks, walk pagination until
+        // the pool is big enough to shuffle over.
         let path = "/music/+recommended/tracks";
 
-        while(path && collected.length < cap){
+        while(path && collected.length < poolTarget){
 
             const doc = await fetchDoc(path);
             if(!doc) break;
@@ -49,7 +57,7 @@
         }
 
 
-        return collected.slice(0, cap);
+        return shuffle(collected).slice(0, cap);
 
     }
 

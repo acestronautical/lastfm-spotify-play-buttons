@@ -104,13 +104,11 @@
 
         for(const doc of similarDocs){
 
-            if(collected.length >= cap) break;
             if(!doc) continue;
 
             const rows = collectTrackSimilarItemsFromDoc(doc, seen);
 
             for(const t of rows){
-                if(collected.length >= cap) break;
                 if(scrobbleSet.has(t.q.toLowerCase())) continue;
                 collected.push({ q:t.q, entity:t.entity });
             }
@@ -118,7 +116,9 @@
         }
 
 
-        return collected;
+        // Shuffle the full pool of similar tracks before slicing so the
+        // mix varies run to run rather than favouring the first seeds.
+        return shuffle(collected).slice(0, cap);
 
     }
 

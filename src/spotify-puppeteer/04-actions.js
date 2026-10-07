@@ -62,47 +62,6 @@
 
 
 
-    const likeStrategies = [
-
-        {
-            name: "data-testid=save-button > button",
-            run: row => row.querySelector(
-                '[data-testid="save-button"] button'
-            )
-        },
-
-        {
-            name: "aria-label matches Liked Songs / Your Library",
-            run: row => row.querySelector(
-                'button[aria-label*="Liked Songs"], ' +
-                'button[aria-label*="Your Library"]'
-            )
-        },
-
-        // Structural fallback: an aria-checked toggle button in the row
-        // that isn't the more-options menu. Spotify's like control has
-        // been aria-checked for years even as data-testids have churned.
-        {
-            name: "aria-checked toggle button",
-            run: row => row.querySelector(
-                'button[aria-checked][data-encore-id="buttonTertiary"]:not([aria-haspopup])'
-            )
-        },
-
-        // Artist rows expose Follow as a plain buttonSecondary with
-        // "Follow" / "Following" text content and no aria attributes.
-        // Only artist rows on the search page carry a buttonSecondary,
-        // so scoping by the encore role is enough.
-        {
-            name: "buttonSecondary (Follow on artist rows)",
-            run: row => row.querySelector(
-                'button[data-encore-id="buttonSecondary"]'
-            )
-        }
-
-    ];
-
-
     // Locale-tolerant "already followed" check for artist Follow buttons.
     // English-only to start; falling through to a click in other locales
     // just toggles Follow off, which is the same failure mode as the
@@ -117,35 +76,132 @@
     }
 
 
-    function doLike(row){
+    // Current track rows no longer carry a dedicated heart/save button —
+    // the only unambiguous "save to Liked Songs" control is the more-menu
+    // item, which is present whether or not playback is active. Match it
+    // (and its already-saved "Remove from Liked Songs" counterpart) so we
+    // can like via the menu and skip when the track is already liked.
+
+    const LIKE_ADD_PATTERNS = [
+        /(save|add) to (your )?liked songs/i,
+        /save to your library/i,
+        /a .adir a tus canciones que te gustan/i,  // es
+    ];
+
+    const LIKE_REMOVE_PATTERNS = [
+        /remove from (your )?liked songs/i,
+        /remove from your library/i,
+    ];
 
 
-        const like = resolveWith(
-            "like button",
-            likeStrategies,
-            row
-        );
+    function findLikeMenuItem(){
+
+        for(const item of document.querySelectorAll('[role="menuitem"]')){
+
+            const label =
+                (item.getAttribute("aria-label") ||
+                 item.textContent || "").trim();
+
+            if(LIKE_REMOVE_PATTERNS.some(re => re.test(label)))
+                return { already: true };
+
+            if(LIKE_ADD_PATTERNS.some(re => re.test(label)))
+                return { item };
+
+        }
+
+        return null;
+
+    }
 
 
-        if(!like) return false;
+    async function doLike(row){
 
 
-        if(like.getAttribute("aria-checked") === "true" ||
-           isAlreadyFollowing(like)){
+        // Artist rows/pages expose Follow as a buttonSecondary — click it
+        // unless we're already following.
+        const follow =
+            row.querySelector('button[data-encore-id="buttonSecondary"]');
 
-            log("Already liked/followed - skipping");
+        if(follow){
 
+            if(isAlreadyFollowing(follow)){
+                log("Already following - skipping");
+                return true;
+            }
+
+            log("Following artist");
+            follow.click();
             return true;
 
         }
 
 
-        log("Liking:", row.innerText.split("\n")[0]);
+        // Direct heart/save button, for any layout that still renders one.
+        const heart =
+            row.querySelector(
+                'button[aria-label*="Liked Songs"], ' +
+                'button[aria-label*="Save to Your Library"], ' +
+                '[data-testid="save-button"] button'
+            );
+
+        if(heart){
+
+            if(heart.getAttribute("aria-checked") === "true" ||
+               /remove/i.test(heart.getAttribute("aria-label") || "")){
+                log("Already liked - skipping");
+                return true;
+            }
+
+            log("Liking via row button");
+            heart.click();
+            return true;
+
+        }
 
 
-        like.click();
+        // Fallback: track rows now only expose the Liked Songs toggle
+        // inside the more-menu.
+        const more =
+            resolveWith("more button", moreStrategies, row);
 
-        return true;
+        if(!more) return false;
+
+
+        log("Opening more menu for like");
+
+        more.click();
+
+
+        try {
+
+            const found =
+                await waitFor(findLikeMenuItem, MENU_WAIT_MS);
+
+
+            if(found.already){
+                log("Already liked - skipping");
+                dismissMenu();
+                return true;
+            }
+
+
+            log("Adding to Liked Songs");
+
+            found.item.click();
+
+            return true;
+
+
+        } catch (e) {
+
+            log("Liked Songs option not found - dismissing menu");
+
+            dismissMenu();
+
+            return false;
+
+        }
 
     }
 
@@ -245,6 +301,17 @@
     }
 
 
+    // Close an open context menu by sending Escape.
+    function dismissMenu(){
+        document.dispatchEvent(
+            new KeyboardEvent(
+                "keydown",
+                { key:"Escape", bubbles:true }
+            )
+        );
+    }
+
+
 
     async function doQueue(row){
 
@@ -282,21 +349,18 @@
 
         } catch (e) {
 
-            log("Queue option not found - dismissing menu");
+            // Spotify only lists "Add to queue" when an active playback
+            // session exists; with nothing playing the item is absent.
+            // Dismiss the menu and fall back to playing this row, which
+            // both plays the track and establishes a session so the
+            // next batch item finds "Add to queue" available.
+
+            log("No 'Add to queue' (no active session) - playing instead");
+
+            dismissMenu();
 
 
-            // Close the menu we opened so we don't leave the tab
-            // in a weird state before it closes.
-
-            document.dispatchEvent(
-                new KeyboardEvent(
-                    "keydown",
-                    { key:"Escape", bubbles:true }
-                )
-            );
-
-
-            return false;
+            return doPlay(row);
 
         }
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spotify Last.fm Puppeteer
 // @namespace    https://github.com/
-// @version      1.8
+// @version      2.0
 // @description  Puppeteer Spotify's search UI to perform actions launched from Last.fm
 // @match        https://open.spotify.com/search/*
 // @grant        none
@@ -56,7 +56,9 @@
         params.get("action") || "play";
 
 
-    const entity =
+    // Reassigned per batch item in SPA-navigation mode (the batch
+    // carries an entity per item); starts from the load-time param.
+    let entity =
         params.get("entity") || "track";
 
 
@@ -67,7 +69,129 @@
     const CLOSE_MS     = 1000;
     const MENU_WAIT_MS = 2500;
 
+    // SPA fast-path tuning: how long to wait for in-app search results
+    // to reflect a navigator.push before falling back to a full reload,
+    // and a courtesy pause between SPA hops so the previous action's
+    // request has fired.
+    const SPA_NAV_TIMEOUT_MS = 4000;
+    const SPA_HOP_DELAY_MS   = 300;
+
     // ---------- utils ----------
+
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+
+
+    // SPA navigation fast-path. Spotify's web player is a React-Router
+    // app; reloading the whole page per batch item costs ~2.2s each,
+    // while an in-app route change updates results in ~0.6s. We reach
+    // the router's history object ("navigator") by walking the React
+    // fiber tree for the NavigationContext value, then push new search
+    // routes without a reload. Everything here is best-effort — any
+    // failure falls back to full-reload navigation, so a Spotify
+    // internals change degrades to the old (slower) behaviour rather
+    // than breaking.
+
+    let cachedNavigator; // undefined = not looked up yet, null = absent
+
+    function findSpotifyNavigator(){
+
+        if(cachedNavigator !== undefined) return cachedNavigator;
+
+        cachedNavigator = null;
+
+        try {
+
+            let rootEl = null, fiberKey = null;
+
+            for(const el of document.querySelectorAll("div, main, body")){
+                const k = Object.keys(el).find(k =>
+                    k.startsWith("__reactFiber$") ||
+                    k.startsWith("__reactContainer$"));
+                if(k){ rootEl = el; fiberKey = k; break; }
+            }
+
+            if(!rootEl) return null;
+
+
+            const seen  = new Set();
+            const stack = [rootEl[fiberKey]];
+            let visited = 0;
+
+            while(stack.length && visited < 20000){
+
+                const f = stack.pop();
+                visited++;
+
+                if(!f || seen.has(f)) continue;
+                seen.add(f);
+
+                const v = f.memoizedProps && f.memoizedProps.value;
+
+                if(v && typeof v === "object"){
+                    if(v.navigator &&
+                       typeof v.navigator.push === "function" &&
+                       typeof v.navigator.createHref === "function"){
+                        cachedNavigator = v.navigator;
+                        break;
+                    }
+                    if(typeof v.push === "function" &&
+                       typeof v.createHref === "function" &&
+                       typeof v.listen === "function"){
+                        cachedNavigator = v;
+                        break;
+                    }
+                }
+
+                if(f.child)   stack.push(f.child);
+                if(f.sibling) stack.push(f.sibling);
+
+            }
+
+        } catch (_) {
+            cachedNavigator = null;
+        }
+
+        return cachedNavigator;
+
+    }
+
+
+    // Signature of the current top result — used to detect when an
+    // in-app search has actually re-rendered after a route push.
+    function firstResultHref(){
+        const root = mainRoot();
+        const a = root.querySelector(
+            'a[href*="/track/"], a[href*="/album/"], a[href*="/artist/"]'
+        );
+        return a ? a.getAttribute("href") : null;
+    }
+
+
+    // Push a new /search/{q} route via the router and wait for the
+    // results to change. Returns false if the push throws or results
+    // don't update in time, so the caller can fall back to a reload.
+    async function spaGotoSearch(nav, item){
+
+        const before = firstResultHref();
+
+        try {
+            nav.push("/search/" + encodeURIComponent(item.q));
+        } catch (_) {
+            return false;
+        }
+
+        const t0 = Date.now();
+
+        while(Date.now() - t0 < SPA_NAV_TIMEOUT_MS){
+            await delay(100);
+            const href = firstResultHref();
+            if(href && href !== before) return true;
+        }
+
+        return false;
+
+    }
+
 
     // Resolve when `check()` returns a truthy value, using a MutationObserver
     // over document.body. Rejects after `timeoutMs` if nothing matches.
@@ -471,47 +595,6 @@
 
 
 
-    const likeStrategies = [
-
-        {
-            name: "data-testid=save-button > button",
-            run: row => row.querySelector(
-                '[data-testid="save-button"] button'
-            )
-        },
-
-        {
-            name: "aria-label matches Liked Songs / Your Library",
-            run: row => row.querySelector(
-                'button[aria-label*="Liked Songs"], ' +
-                'button[aria-label*="Your Library"]'
-            )
-        },
-
-        // Structural fallback: an aria-checked toggle button in the row
-        // that isn't the more-options menu. Spotify's like control has
-        // been aria-checked for years even as data-testids have churned.
-        {
-            name: "aria-checked toggle button",
-            run: row => row.querySelector(
-                'button[aria-checked][data-encore-id="buttonTertiary"]:not([aria-haspopup])'
-            )
-        },
-
-        // Artist rows expose Follow as a plain buttonSecondary with
-        // "Follow" / "Following" text content and no aria attributes.
-        // Only artist rows on the search page carry a buttonSecondary,
-        // so scoping by the encore role is enough.
-        {
-            name: "buttonSecondary (Follow on artist rows)",
-            run: row => row.querySelector(
-                'button[data-encore-id="buttonSecondary"]'
-            )
-        }
-
-    ];
-
-
     // Locale-tolerant "already followed" check for artist Follow buttons.
     // English-only to start; falling through to a click in other locales
     // just toggles Follow off, which is the same failure mode as the
@@ -526,35 +609,132 @@
     }
 
 
-    function doLike(row){
+    // Current track rows no longer carry a dedicated heart/save button —
+    // the only unambiguous "save to Liked Songs" control is the more-menu
+    // item, which is present whether or not playback is active. Match it
+    // (and its already-saved "Remove from Liked Songs" counterpart) so we
+    // can like via the menu and skip when the track is already liked.
+
+    const LIKE_ADD_PATTERNS = [
+        /(save|add) to (your )?liked songs/i,
+        /save to your library/i,
+        /a .adir a tus canciones que te gustan/i,  // es
+    ];
+
+    const LIKE_REMOVE_PATTERNS = [
+        /remove from (your )?liked songs/i,
+        /remove from your library/i,
+    ];
 
 
-        const like = resolveWith(
-            "like button",
-            likeStrategies,
-            row
-        );
+    function findLikeMenuItem(){
+
+        for(const item of document.querySelectorAll('[role="menuitem"]')){
+
+            const label =
+                (item.getAttribute("aria-label") ||
+                 item.textContent || "").trim();
+
+            if(LIKE_REMOVE_PATTERNS.some(re => re.test(label)))
+                return { already: true };
+
+            if(LIKE_ADD_PATTERNS.some(re => re.test(label)))
+                return { item };
+
+        }
+
+        return null;
+
+    }
 
 
-        if(!like) return false;
+    async function doLike(row){
 
 
-        if(like.getAttribute("aria-checked") === "true" ||
-           isAlreadyFollowing(like)){
+        // Artist rows/pages expose Follow as a buttonSecondary — click it
+        // unless we're already following.
+        const follow =
+            row.querySelector('button[data-encore-id="buttonSecondary"]');
 
-            log("Already liked/followed - skipping");
+        if(follow){
 
+            if(isAlreadyFollowing(follow)){
+                log("Already following - skipping");
+                return true;
+            }
+
+            log("Following artist");
+            follow.click();
             return true;
 
         }
 
 
-        log("Liking:", row.innerText.split("\n")[0]);
+        // Direct heart/save button, for any layout that still renders one.
+        const heart =
+            row.querySelector(
+                'button[aria-label*="Liked Songs"], ' +
+                'button[aria-label*="Save to Your Library"], ' +
+                '[data-testid="save-button"] button'
+            );
+
+        if(heart){
+
+            if(heart.getAttribute("aria-checked") === "true" ||
+               /remove/i.test(heart.getAttribute("aria-label") || "")){
+                log("Already liked - skipping");
+                return true;
+            }
+
+            log("Liking via row button");
+            heart.click();
+            return true;
+
+        }
 
 
-        like.click();
+        // Fallback: track rows now only expose the Liked Songs toggle
+        // inside the more-menu.
+        const more =
+            resolveWith("more button", moreStrategies, row);
 
-        return true;
+        if(!more) return false;
+
+
+        log("Opening more menu for like");
+
+        more.click();
+
+
+        try {
+
+            const found =
+                await waitFor(findLikeMenuItem, MENU_WAIT_MS);
+
+
+            if(found.already){
+                log("Already liked - skipping");
+                dismissMenu();
+                return true;
+            }
+
+
+            log("Adding to Liked Songs");
+
+            found.item.click();
+
+            return true;
+
+
+        } catch (e) {
+
+            log("Liked Songs option not found - dismissing menu");
+
+            dismissMenu();
+
+            return false;
+
+        }
 
     }
 
@@ -654,6 +834,17 @@
     }
 
 
+    // Close an open context menu by sending Escape.
+    function dismissMenu(){
+        document.dispatchEvent(
+            new KeyboardEvent(
+                "keydown",
+                { key:"Escape", bubbles:true }
+            )
+        );
+    }
+
+
 
     async function doQueue(row){
 
@@ -691,21 +882,18 @@
 
         } catch (e) {
 
-            log("Queue option not found - dismissing menu");
+            // Spotify only lists "Add to queue" when an active playback
+            // session exists; with nothing playing the item is absent.
+            // Dismiss the menu and fall back to playing this row, which
+            // both plays the track and establishes a session so the
+            // next batch item finds "Add to queue" available.
+
+            log("No 'Add to queue' (no active session) - playing instead");
+
+            dismissMenu();
 
 
-            // Close the menu we opened so we don't leave the tab
-            // in a weird state before it closes.
-
-            document.dispatchEvent(
-                new KeyboardEvent(
-                    "keydown",
-                    { key:"Escape", bubbles:true }
-                )
-            );
-
-
-            return false;
+            return doPlay(row);
 
         }
 
@@ -716,63 +904,88 @@
 
     // ---------- main ----------
 
-    async function run(){
-
+    // Find the result row for the current page/route and perform the
+    // action. Returns success. Used for both the initial page load and
+    // each subsequent SPA hop.
+    async function processCurrentItem(){
 
         let row;
 
-
         try {
-
-            row =
-                await waitFor(
-                    findRow,
-                    TIMEOUT_MS
-                );
-
-
+            row = await waitFor(findRow, TIMEOUT_MS);
         } catch (e) {
-
-            log(
-                "No Spotify result found within",
-                TIMEOUT_MS, "ms"
-            );
-
-            finish(false);
-
-            return;
-
+            log("No Spotify result found within", TIMEOUT_MS, "ms");
+            return false;
         }
-
-
-        let success = false;
 
         switch(action){
-
-
-            case "queue":
-
-                success = await doQueue(row);
-                break;
-
-
-            case "like":
-
-                success = doLike(row);
-                break;
-
-
+            case "queue": return await doQueue(row);
+            case "like":  return await doLike(row);
             case "play":
+            default:      return doPlay(row);
+        }
 
-            default:
+    }
 
-                success = doPlay(row);
-                break;
+
+    async function run(){
+
+
+        const firstOk = await processCurrentItem();
+
+
+        const batch = parseBatch();
+
+        // Single item (or last of a reload chain): close on success.
+        if(!batch || batch.length <= 1){
+            finish(firstOk);
+            return;
+        }
+
+
+        // Items still to process after the one this page loaded for.
+        let remaining = batch.slice(1);
+
+
+        // Try the SPA fast-path. If the router isn't reachable, hand
+        // off to the full-reload hop chain (finish → navigateNext).
+        const nav = findSpotifyNavigator();
+
+        if(!nav){
+            log("SPA navigator not found - using full-reload hops");
+            finish(firstOk);
+            return;
+        }
+
+        log("SPA navigator found - fast in-app hops");
+
+
+        while(remaining.length){
+
+            const next = remaining[0];
+
+            await delay(SPA_HOP_DELAY_MS);
+
+            const switched = await spaGotoSearch(nav, next);
+
+            if(!switched){
+                // SPA hop stalled — hand the rest to the reload chain.
+                log("SPA hop stalled - falling back to reload");
+                navigateNext(remaining);
+                return;
+            }
+
+            entity = next.entity || "track";
+
+            await processCurrentItem();
+
+            remaining = remaining.slice(1);
 
         }
 
 
-        finish(success);
+        // Whole batch handled in-page.
+        closeHelper();
 
     }
 

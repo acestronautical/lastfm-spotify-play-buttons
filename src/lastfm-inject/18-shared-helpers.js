@@ -1,5 +1,31 @@
     // ---------- shared helpers for menu actions ----------
 
+    // Fisher–Yates shuffle (unbiased). shuffle() returns a new array;
+    // shuffleInPlace() mutates. Used to randomise candidate pools so
+    // the discovery actions surface different picks on repeat runs.
+    function shuffle(arr){
+        const a = arr.slice();
+        for(let i = a.length - 1; i > 0; i--){
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
+    function shuffleInPlace(arr){
+        for(let i = arr.length - 1; i > 0; i--){
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    // Random sample of up to n items without replacement.
+    function sampleN(arr, n){
+        return shuffle(arr).slice(0, n);
+    }
+
+
     async function fetchDoc(pathOrHref){
 
         try {
